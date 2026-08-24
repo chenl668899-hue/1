@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: write
@@ -50,23 +52,19 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
-
+          import re
           p=Path('app/build.gradle')
           s=p.read_text()
-          import re
           s=re.sub(r'versionCode\s+\d+', 'versionCode 20', s)
           s=re.sub(r"versionName\s+'[^']+'", "versionName '2.0.0'", s)
           p.write_text(s)
-
           p=Path('app/src/main/AndroidManifest.xml')
           s=p.read_text()
-          import re
           s=re.sub(r'android:icon="@[^"]+"', 'android:icon="@mipmap/ic_launcher"', s)
           s=re.sub(r'android:roundIcon="@[^"]+"', 'android:roundIcon="@mipmap/ic_launcher_round"', s)
           if 'android:icon=' not in s:
               s=s.replace('android:allowBackup="true"', 'android:allowBackup="true"\n        android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"')
           p.write_text(s)
-
           p=Path('app/src/main/res/values/strings.xml')
           s=p.read_text().replace('岁康商贸销售管理系统管理系统','岁康商贸销售管理系统')
           p.write_text(s)
@@ -103,6 +101,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish V2 APK to repository
+        if: github.event_name == 'push'
         shell: bash
         run: |
           mkdir -p dist
