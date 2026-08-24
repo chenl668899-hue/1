@@ -29,6 +29,39 @@ jobs:
           base64 --decode payload/v11.patch.gz.b64 | gzip -d > /tmp/v11.patch
           patch -p1 < /tmp/v11.patch
 
+      - name: Apply V1.2 cost-price and logo fixes
+        shell: bash
+        run: |
+          cp payload/v12_DataStore.java app/src/main/java/com/suikang/sales/DataStore.java
+          cp payload/v12_XlsxProductImporter.java app/src/main/java/com/suikang/sales/XlsxProductImporter.java
+          mkdir -p app/src/main/res/drawable
+          base64 --decode payload/app_logo_128.png.b64 > app/src/main/res/drawable/app_logo.png
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('app/build.gradle')
+          s=p.read_text()
+          s=s.replace("versionCode 2", "versionCode 3")
+          s=s.replace("versionName '1.1.0'", "versionName '1.2.0'")
+          p.write_text(s)
+
+          p=Path('app/src/main/AndroidManifest.xml')
+          s=p.read_text()
+          if 'android:icon="@drawable/app_logo"' not in s:
+              s=s.replace('android:allowBackup="true"', 'android:allowBackup="true"\n        android:icon="@drawable/app_logo"\n        android:roundIcon="@drawable/app_logo"')
+          p.write_text(s)
+
+          p=Path('app/src/main/res/values/strings.xml')
+          s=p.read_text().replace('岁康商贸销售管理系统管理系统','岁康商贸销售管理系统')
+          p.write_text(s)
+
+          p=Path('app/src/main/java/com/suikang/sales/MainActivity.java')
+          s=p.read_text()
+          s=s.replace('正在识别产品、价格和图片…','正在识别产品、成本价和图片…')
+          s=s.replace('产品编号作为唯一识别码；相同编号更新原产品，新编号自动新增。','产品编号作为唯一识别码；原表“价格”按成本价导入；相同编号更新原产品，新编号自动新增。')
+          p.write_text(s)
+          PY
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -55,7 +88,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SuikangSalesManagement-V1.1-APK
+          name: SuikangSalesManagement-V1.2-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -64,9 +97,9 @@ jobs:
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/debug/app-debug.apk 'dist/SuikangSalesManagement.apk'
-          cp app/build/outputs/apk/debug/app-debug.apk 'dist/SuikangSalesManagement-V1.1.apk'
+          cp app/build/outputs/apk/debug/app-debug.apk 'dist/SuikangSalesManagement-V1.2.apk'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add dist/SuikangSalesManagement.apk dist/SuikangSalesManagement-V1.1.apk
-          git commit -m 'Publish Suikang Sales V1.1 APK' || exit 0
+          git add dist/SuikangSalesManagement.apk dist/SuikangSalesManagement-V1.2.apk
+          git commit -m 'Publish Suikang Sales V1.2 APK' || exit 0
           git push
