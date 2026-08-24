@@ -51,12 +51,32 @@ jobs:
             cp app/src/main/res/mipmap-$d/ic_launcher.png app/src/main/res/mipmap-$d/ic_launcher_round.png
           done
 
-      - name: Apply V2.1 persistent image fix
+      - name: Apply V2.1 persistent image and launcher fix
         shell: bash
         run: |
+          mkdir -p app/src/main/res/mipmap-anydpi-v26
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            cp app/src/main/res/mipmap-$d/ic_launcher.png app/src/main/res/mipmap-$d/ic_launcher_foreground.png
+          done
+          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/suikang_launcher_bg" />
+              <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+          </adaptive-icon>
+          XML
+          cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
           python3 - <<'PY'
           from pathlib import Path
           import re
+
+          colors=Path('app/src/main/res/values/colors.xml')
+          cs=colors.read_text()
+          if 'name="suikang_launcher_bg"' not in cs:
+              cs=cs.replace('</resources>','    <color name="suikang_launcher_bg">#0D2741</color>\n</resources>')
+              colors.write_text(cs)
+
           p=Path('app/src/main/java/com/suikang/sales/MainActivity.java')
           s=p.read_text()
           old='private InputStream openProductImage(Models.Product p)throws Exception{if(p.imageUri!=null&&!p.imageUri.isEmpty()){Uri u=Uri.parse(p.imageUri);if("file".equalsIgnoreCase(u.getScheme()))return new FileInputStream(new File(u.getPath()));return getContentResolver().openInputStream(u);}if(p.imageAsset!=null&&!p.imageAsset.isEmpty())return getAssets().open(p.imageAsset);return null;}'
