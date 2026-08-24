@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 permissions:
   contents: write
@@ -44,58 +42,26 @@ jobs:
           cp payload/v2_Models.java app/src/main/java/com/suikang/sales/Models.java
           cp payload/v2_DataStore.java app/src/main/java/com/suikang/sales/DataStore.java
           cp payload/v2_ChannelXlsxExporter.java app/src/main/java/com/suikang/sales/ChannelXlsxExporter.java
-
           mkdir -p app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             base64 --decode payload/app_logo_128.png.b64 > app/src/main/res/mipmap-$d/ic_launcher.png
             cp app/src/main/res/mipmap-$d/ic_launcher.png app/src/main/res/mipmap-$d/ic_launcher_round.png
           done
 
-      - name: Apply V2.1 persistent image and launcher fix
+      - name: Apply V2.1 persistent image loader
         shell: bash
         run: |
-          mkdir -p app/src/main/res/mipmap-anydpi-v26
-          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            cp app/src/main/res/mipmap-$d/ic_launcher.png app/src/main/res/mipmap-$d/ic_launcher_foreground.png
-          done
-          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@color/suikang_launcher_bg" />
-              <foreground android:drawable="@mipmap/ic_launcher_foreground" />
-          </adaptive-icon>
-          XML
-          cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
-
           python3 - <<'PY'
           from pathlib import Path
-          import re
-
-          colors=Path('app/src/main/res/values/colors.xml')
-          cs=colors.read_text()
-          if 'name="suikang_launcher_bg"' not in cs:
-              cs=cs.replace('</resources>','    <color name="suikang_launcher_bg">#0D2741</color>\n</resources>')
-              colors.write_text(cs)
-
           p=Path('app/src/main/java/com/suikang/sales/MainActivity.java')
           s=p.read_text()
           old='private InputStream openProductImage(Models.Product p)throws Exception{if(p.imageUri!=null&&!p.imageUri.isEmpty()){Uri u=Uri.parse(p.imageUri);if("file".equalsIgnoreCase(u.getScheme()))return new FileInputStream(new File(u.getPath()));return getContentResolver().openInputStream(u);}if(p.imageAsset!=null&&!p.imageAsset.isEmpty())return getAssets().open(p.imageAsset);return null;}'
           new='''private InputStream openProductImage(Models.Product p)throws Exception{
               Exception last=null;
               if(p.imageUri!=null&&!p.imageUri.trim().isEmpty()){
-                  try{
-                      Uri u=Uri.parse(p.imageUri);
-                      if("file".equalsIgnoreCase(u.getScheme())){
-                          String path=u.getPath();
-                          if(path!=null){File f=new File(path);if(f.isFile()&&f.length()>0)return new FileInputStream(f);}
-                      }else{
-                          InputStream in=getContentResolver().openInputStream(u);if(in!=null)return in;
-                      }
-                  }catch(Exception e){last=e;}
+                  try{Uri u=Uri.parse(p.imageUri);if("file".equalsIgnoreCase(u.getScheme())){String path=u.getPath();if(path!=null){File f=new File(path);if(f.isFile()&&f.length()>0)return new FileInputStream(f);}}else{InputStream in=getContentResolver().openInputStream(u);if(in!=null)return in;}}catch(Exception e){last=e;}
               }
-              if(p.imageAsset!=null&&!p.imageAsset.trim().isEmpty()){
-                  try{return getAssets().open(p.imageAsset);}catch(Exception e){last=e;}
-              }
+              if(p.imageAsset!=null&&!p.imageAsset.trim().isEmpty()){try{return getAssets().open(p.imageAsset);}catch(Exception e){last=e;}}
               File dir=new File(getFilesDir(),"product_images");
               if(dir.isDirectory()){
                   String raw=(p.code!=null&&!p.code.trim().isEmpty())?p.code:p.id;
@@ -106,27 +72,70 @@ jobs:
               }
               if(last!=null)throw last;return null;
           }'''
-          if old not in s: raise SystemExit('openProductImage signature not found')
-          s=s.replace(old,new)
+          if old in s:s=s.replace(old,new)
           marker='private View productCard(Models.Product p){'
           helper='''private boolean hasProductImage(Models.Product p){try(InputStream in=openProductImage(p)){return in!=null;}catch(Exception e){return false;}}\n    private int usableProductImageCount(){int n=0;for(Models.Product p:products)if(hasProductImage(p))n++;return n;}\n\n    '''
           if helper.strip() not in s:s=s.replace(marker,helper+marker)
           s=s.replace('共 "+products.size()+" 个产品，图片与成本价保存在本机','共 "+products.size()+" 个产品，已关联图片 "+usableProductImageCount()+" 张 · 成本价保存在本机')
           s=s.replace('TextView imp=button("导入 Excel",true);','TextView imp=button("导入 / 更新 Excel",true);')
-          s=s.replace('保存图片 "+a.imagesSaved+" 张")','保存图片 "+a.imagesSaved+" 张\\n\\n图片已关联到产品库")')
+          p.write_text(s)
+          PY
+
+      - name: Apply V2.2 image recovery and hard launcher refresh
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Make XLSX image matching tolerant to Excel anchor offsets and media path variants.
+          p=Path('app/src/main/java/com/suikang/sales/XlsxProductImporter.java')
+          s=p.read_text()
+          s=s.replace('if(imageCol>=0&&col>=0&&col!=imageCol)continue;','if(imageCol>=0&&col>=0&&Math.abs(col-imageCol)>1)continue;')
+          s=s.replace('ZipEntry ze=zip.getEntry(r.imageEntry);','ZipEntry ze=zip.getEntry(r.imageEntry);if(ze==null&&r.imageEntry.startsWith("/"))ze=zip.getEntry(r.imageEntry.substring(1));if(ze==null){String bn=new File(r.imageEntry).getName();Enumeration<? extends ZipEntry> en=zip.entries();while(en.hasMoreElements()){ZipEntry x=en.nextElement();if(x.getName().endsWith("/"+bn)){ze=x;break;}}}')
           p.write_text(s)
 
+          # Make image recovery explicit when an upgraded install still has old product rows without imageUri.
+          p=Path('app/src/main/java/com/suikang/sales/MainActivity.java')
+          s=p.read_text()
+          s=s.replace('TextView imp=button("导入 / 更新 Excel",true);','TextView imp=button(usableProductImageCount()==0?"恢复产品图片 / 导入 Excel":"导入 / 更新 Excel",true);')
+          s=s.replace('已关联图片 "+usableProductImageCount()+" 张 · 成本价保存在本机','已关联图片 "+usableProductImageCount()+" 张 · "+(usableProductImageCount()==0?"请选择原 Excel 恢复图片":"图片已保存到本机")+" · 成本价保存在本机')
+          p.write_text(s)
+
+          # Bump version so Android treats this as a distinct update.
           p=Path('app/build.gradle')
           s=p.read_text()
-          s=re.sub(r'versionCode\s+\d+', 'versionCode 21', s)
-          s=re.sub(r"versionName\s+'[^']+'", "versionName '2.1.0'", s)
+          s=re.sub(r'versionCode\s+\d+', 'versionCode 22', s)
+          s=re.sub(r"versionName\s+'[^']+'", "versionName '2.2.0'", s)
           p.write_text(s)
+          PY
 
+          # Use a brand-new launcher resource name to bypass stale launcher resources/caches.
+          mkdir -p app/src/main/res/mipmap-anydpi-v26 app/src/main/res/values
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            base64 --decode payload/app_logo_128.png.b64 > app/src/main/res/mipmap-$d/suikang_v22_launcher.png
+            cp app/src/main/res/mipmap-$d/suikang_v22_launcher.png app/src/main/res/mipmap-$d/suikang_v22_launcher_round.png
+            cp app/src/main/res/mipmap-$d/suikang_v22_launcher.png app/src/main/res/mipmap-$d/suikang_v22_launcher_foreground.png
+          done
+          if ! grep -q 'name="suikang_launcher_bg"' app/src/main/res/values/colors.xml; then
+            sed -i 's#</resources>#    <color name="suikang_launcher_bg">#0D2741</color>\n</resources>#' app/src/main/res/values/colors.xml
+          fi
+          cat > app/src/main/res/mipmap-anydpi-v26/suikang_v22_launcher.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/suikang_launcher_bg" />
+              <foreground android:drawable="@mipmap/suikang_v22_launcher_foreground" />
+          </adaptive-icon>
+          XML
+          cp app/src/main/res/mipmap-anydpi-v26/suikang_v22_launcher.xml app/src/main/res/mipmap-anydpi-v26/suikang_v22_launcher_round.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
           p=Path('app/src/main/AndroidManifest.xml')
           s=p.read_text()
-          s=re.sub(r'android:icon="@[^"]+"','android:icon="@mipmap/ic_launcher"',s)
-          s=re.sub(r'android:roundIcon="@[^"]+"','android:roundIcon="@mipmap/ic_launcher_round"',s)
-          if 'android:icon=' not in s:s=s.replace('android:allowBackup="true"','android:allowBackup="true"\n        android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"')
+          s=re.sub(r'android:icon="@[^"]+"','android:icon="@mipmap/suikang_v22_launcher"',s)
+          s=re.sub(r'android:roundIcon="@[^"]+"','android:roundIcon="@mipmap/suikang_v22_launcher_round"',s)
+          if 'android:icon=' not in s:s=s.replace('android:allowBackup="true"','android:allowBackup="true"\n        android:icon="@mipmap/suikang_v22_launcher"\n        android:roundIcon="@mipmap/suikang_v22_launcher_round"')
           p.write_text(s)
           PY
 
@@ -150,25 +159,25 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build V2.1 APK
+      - name: Build V2.2 APK
         run: gradle --no-daemon :app:assembleDebug --stacktrace
 
-      - name: Upload V2.1 APK artifact
+      - name: Upload V2.2 APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SuikangSalesManagement-V2.1-APK
+          name: SuikangSalesManagement-V2.2-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publish V2.1 APK to repository
+      - name: Publish V2.2 APK to repository
         if: github.event_name == 'push'
         shell: bash
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/debug/app-debug.apk 'dist/SuikangSalesManagement.apk'
-          cp app/build/outputs/apk/debug/app-debug.apk 'dist/SuikangSalesManagement-V2.1.apk'
+          cp app/build/outputs/apk/debug/app-debug.apk 'dist/SuikangSalesManagement-V2.2.apk'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add dist/SuikangSalesManagement.apk dist/SuikangSalesManagement-V2.1.apk
-          git commit -m 'Publish Suikang Sales V2.1 APK' || exit 0
+          git add dist/SuikangSalesManagement.apk dist/SuikangSalesManagement-V2.2.apk
+          git commit -m 'Publish Suikang Sales V2.2 APK' || exit 0
           git push
