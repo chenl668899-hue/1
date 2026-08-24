@@ -75,9 +75,11 @@ jobs:
         shell: bash
         run: |
           echo '=== MainActivity image loading ==='
-          grep -n -C 10 -E 'imageUri|imageAsset|setImageURI|BitmapFactory|setImageBitmap|ic_menu_gallery|product_images' app/src/main/java/com/suikang/sales/MainActivity.java || true
+          grep -n -C 12 -E 'imageUri|imageAsset|setImageURI|BitmapFactory|setImageBitmap|ic_menu_gallery|product_images' app/src/main/java/com/suikang/sales/MainActivity.java || true
           echo '=== Importer image persistence ==='
-          grep -n -C 8 -E 'imageUri|imageAsset|product_images|readImagesByRow|imagesSaved' app/src/main/java/com/suikang/sales/XlsxProductImporter.java || true
+          grep -n -C 10 -E 'imageUri|imageAsset|product_images|readImagesByRow|imagesSaved' app/src/main/java/com/suikang/sales/XlsxProductImporter.java || true
+          echo 'V21_DIAGNOSTIC_COMPLETE'
+          exit 1
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
