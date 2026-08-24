@@ -23,6 +23,12 @@ jobs:
           unzip -o source.zip -d .
           rm -f source.zip
 
+      - name: Apply V1.1 Excel import upgrade
+        shell: bash
+        run: |
+          base64 --decode payload/v11.patch.gz.b64 | gzip -d > /tmp/v11.patch
+          patch -p1 < /tmp/v11.patch
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -49,7 +55,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SuikangSalesManagement-APK
+          name: SuikangSalesManagement-V1.1-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -58,8 +64,9 @@ jobs:
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/debug/app-debug.apk 'dist/SuikangSalesManagement.apk'
+          cp app/build/outputs/apk/debug/app-debug.apk 'dist/SuikangSalesManagement-V1.1.apk'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add dist/SuikangSalesManagement.apk
-          git commit -m 'Publish latest APK' || exit 0
+          git add dist/SuikangSalesManagement.apk dist/SuikangSalesManagement-V1.1.apk
+          git commit -m 'Publish Suikang Sales V1.1 APK' || exit 0
           git push
