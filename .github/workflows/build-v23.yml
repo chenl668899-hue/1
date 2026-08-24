@@ -1,4 +1,4 @@
-name: Build Suikang V2.3
+name: Build Suikang V2.3.2
 
 on:
   pull_request:
@@ -8,12 +8,12 @@ permissions:
   contents: read
 
 jobs:
-  build-v23:
+  build-v232:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct V2.3 source
+      - name: Reconstruct source
         shell: bash
         run: |
           cat payload/part*.b64 | base64 --decode > source.zip
@@ -28,23 +28,45 @@ jobs:
           cp payload/v2_Models.java app/src/main/java/com/suikang/sales/Models.java
           cp payload/v2_ChannelXlsxExporter.java app/src/main/java/com/suikang/sales/ChannelXlsxExporter.java
 
-      - name: Preserve V2.2 importer and launcher fixes
+      - name: Apply V2.3.2 fixes
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
+
           p=Path('app/src/main/java/com/suikang/sales/XlsxProductImporter.java')
           s=p.read_text()
           s=s.replace('if(imageCol>=0&&col>=0&&col!=imageCol)continue;','if(imageCol>=0&&col>=0&&Math.abs(col-imageCol)>1)continue;')
           s=s.replace('ZipEntry ze=zip.getEntry(r.imageEntry);','ZipEntry ze=zip.getEntry(r.imageEntry);if(ze==null&&r.imageEntry.startsWith("/"))ze=zip.getEntry(r.imageEntry.substring(1));if(ze==null){String bn=new File(r.imageEntry).getName();Enumeration<? extends ZipEntry> en=zip.entries();while(en.hasMoreElements()){ZipEntry x=en.nextElement();if(x.getName().endsWith("/"+bn)){ze=x;break;}}}')
           p.write_text(s)
+
+          p=Path('app/src/main/java/com/suikang/sales/MainActivity.java')
+          s=p.read_text()
+          s=s.replace('header.setPadding(dp(16),dp(12),dp(16),dp(12));header.setBackgroundColor(C_NAVY);',
+          'int statusTop=0;int statusId=getResources().getIdentifier("status_bar_height","dimen","android");if(statusId>0)statusTop=getResources().getDimensionPixelSize(statusId);header.setPadding(dp(12),statusTop+dp(7),dp(16),dp(8));header.setBackgroundColor(C_NAVY);')
+          s=s.replace('header.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));','header.addView(logo,new LinearLayout.LayoutParams(dp(30),dp(30)));')
+          s=s.replace('ht.setPadding(dp(12),0,0,0);TextView t=text(title,20,true);','ht.setPadding(dp(8),0,0,0);TextView t=text(title,19,true);')
+          s=s.replace('Models.Product pp=findProduct(it.productId);Bitmap bm=pp==null?null:thumb(pp,54,54);','Bitmap bm=thumbOrderItem(it,54,54);')
+          s=s.replace('TextView profit=text("毛利润  "+money(it.grossProfit()),13,true);profit.setTextColor(it.grossProfit()>=0?C_PROFIT:C_LOSS);',
+          'TextView profit=text(it.salePrice>0?"毛利润  "+money(it.grossProfit()):"毛利润  待填写销售价",13,true);profit.setTextColor(it.salePrice>0?(it.grossProfit()>=0?C_PROFIT:C_LOSS):C_MUTED);')
+          s=s.replace('private Models.Product findProduct(String id){for(Models.Product p:products)if(p.id.equals(id))return p;return null;}',
+          'private Bitmap thumbOrderItem(Models.OrderItem it,int w,int h){Models.Product tmp=new Models.Product();tmp.imageAsset=it.imageAsset==null?"":it.imageAsset;tmp.imageUri=it.imageUri==null?"":it.imageUri;Bitmap bm=thumb(tmp,w,h);if(bm!=null)return bm;Models.Product pp=findProduct(it.productId);return pp==null?null:thumb(pp,w,h);}\n    private Models.Product findProduct(String id){for(Models.Product p:products)if(p.id.equals(id))return p;return null;}')
+          s=s.replace('private void updateProfit(TextView v,Models.OrderItem i){v.setText("毛利润  "+money(i.grossProfit()));v.setTextColor(i.grossProfit()>=0?C_PROFIT:C_LOSS);}',
+          'private void updateProfit(TextView v,Models.OrderItem i){if(i.salePrice<=0){v.setText("毛利润  待填写销售价");v.setTextColor(C_MUTED);}else{v.setText("毛利润  "+money(i.grossProfit()));v.setTextColor(i.grossProfit()>=0?C_PROFIT:C_LOSS);}}')
+          old='private void recalc(Models.SalesOrder o){if(summarySales==null)return;summarySales.setText(money(o.sales()));summaryCost.setText(money(o.goodsCost()));summaryGross.setText(money(o.grossProfit()));summaryFreight.setText(money(o.freight));summaryOther.setText(money(o.extraFees()));summaryNet.setText(money(o.netProfit()));summaryNet.setTextColor(o.netProfit()>=0?C_PROFIT:C_LOSS);summaryMargin.setText(String.format(Locale.CHINA,"%.2f%%",o.margin()));summaryMargin.setTextColor(o.margin()>=0?C_PROFIT:C_LOSS);}'
+          new='private boolean hasMissingSalePrice(Models.SalesOrder o){for(Models.OrderItem it:o.items)if(it.salePrice<=0)return true;return false;}\n    private void recalc(Models.SalesOrder o){if(summarySales==null)return;summaryCost.setText(money(o.goodsCost()));summaryFreight.setText(money(o.freight));summaryOther.setText(money(o.extraFees()));if(hasMissingSalePrice(o)){summarySales.setText("待填写");summaryGross.setText("待计算");summaryNet.setText("待计算");summaryMargin.setText("待计算");summaryGross.setTextColor(C_MUTED);summaryNet.setTextColor(C_MUTED);summaryMargin.setTextColor(C_MUTED);return;}summarySales.setText(money(o.sales()));summaryGross.setText(money(o.grossProfit()));summaryGross.setTextColor(o.grossProfit()>=0?C_PROFIT:C_LOSS);summaryNet.setText(money(o.netProfit()));summaryNet.setTextColor(o.netProfit()>=0?C_PROFIT:C_LOSS);summaryMargin.setText(String.format(Locale.CHINA,"%.2f%%",o.margin()));summaryMargin.setTextColor(o.margin()>=0?C_PROFIT:C_LOSS);}'
+          if old not in s: raise SystemExit('recalc pattern not found')
+          s=s.replace(old,new)
+          p.write_text(s)
+
           p=Path('app/build.gradle')
           s=p.read_text()
-          s=re.sub(r'versionCode\s+\d+','versionCode 23',s)
-          s=re.sub(r"versionName\s+'[^']+'","versionName '2.3.0'",s)
+          s=re.sub(r'versionCode\s+\d+','versionCode 232',s)
+          s=re.sub(r"versionName\s+'[^']+'","versionName '2.3.2'",s)
           p.write_text(s)
           PY
+
           mkdir -p app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi app/src/main/res/mipmap-anydpi-v26 app/src/main/res/values
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             base64 --decode payload/app_logo_128.png.b64 > app/src/main/res/mipmap-$d/suikang_v23_launcher.png
@@ -73,13 +95,6 @@ jobs:
           XML
           cp app/src/main/res/mipmap-anydpi-v26/suikang_v23_launcher.xml app/src/main/res/mipmap-anydpi-v26/suikang_v23_launcher_round.xml
 
-      - name: Diagnose order rendering
-        shell: bash
-        run: |
-          echo '=== ORDER / PROFIT / IMAGE MATCHES ==='
-          grep -n -C 10 -E '毛利润|salePrice|imageAsset|imageUri|loadProductImage|setImage|orderItems|draftItems' app/src/main/java/com/suikang/sales/MainActivity.java | sed -n '1,320p'
-          exit 1
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -92,11 +107,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build V2.3 APK
+      - name: Build V2.3.2 APK
         run: gradle --no-daemon :app:assembleDebug --stacktrace
-      - name: Upload V2.3 APK
+      - name: Upload V2.3.2 APK
         uses: actions/upload-artifact@v4
         with:
-          name: SuikangSalesManagement-V2.3-APK
+          name: SuikangSalesManagement-V2.3.2-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
