@@ -23,6 +23,7 @@ jobs:
           patch -p1 < /tmp/v11.patch
           cp payload/v12_XlsxProductImporter.java app/src/main/java/com/suikang/sales/XlsxProductImporter.java
           base64 --decode payload/v23_MainActivity.java.gz.b64 | gzip -d > app/src/main/java/com/suikang/sales/MainActivity.java
+          sed -i 's/R\.mipmap\.ic_launcher/R.mipmap.suikang_v23_launcher/g' app/src/main/java/com/suikang/sales/MainActivity.java
           base64 --decode payload/v23_DataStore.java.gz.b64 | gzip -d > app/src/main/java/com/suikang/sales/DataStore.java
           cp payload/v2_Models.java app/src/main/java/com/suikang/sales/Models.java
           cp payload/v2_ChannelXlsxExporter.java app/src/main/java/com/suikang/sales/ChannelXlsxExporter.java
