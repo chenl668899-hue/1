@@ -1,0 +1,1 @@
+Trigger V2.2 Android build after workflow installation.
