@@ -71,6 +71,14 @@ jobs:
           p.write_text(s)
           PY
 
+      - name: Diagnose V2.1 product image loading
+        shell: bash
+        run: |
+          echo '=== MainActivity image loading ==='
+          grep -n -C 10 -E 'imageUri|imageAsset|setImageURI|BitmapFactory|setImageBitmap|ic_menu_gallery|product_images' app/src/main/java/com/suikang/sales/MainActivity.java || true
+          echo '=== Importer image persistence ==='
+          grep -n -C 8 -E 'imageUri|imageAsset|product_images|readImagesByRow|imagesSaved' app/src/main/java/com/suikang/sales/XlsxProductImporter.java || true
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
