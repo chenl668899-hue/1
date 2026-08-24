@@ -29,12 +29,19 @@ public final class PdfQuotationExporter {
         info(s);
         section(s,"产品明细");
         for(int i=0;i<o.items.size();i++) item(s,o.items.get(i),i+1);
-        ensure(s,110);
+        ensure(s,170);
         line(s);
         s.y+=16;
         labelValue(s,"报价总金额",money(o.sales()),18,true);
+        if(o.depositRate>0||o.depositAmount>0){
+            double amount=o.depositAmount>0?o.depositAmount:o.sales()*o.depositRate/100.0;
+            double rate=o.depositRate>0?o.depositRate:(o.sales()>0?amount/o.sales()*100.0:0);
+            labelValue(s,"定金比例",String.format(Locale.CHINA,"%.2f%%",rate),13,true);
+            labelValue(s,"定金金额",money(amount),13,true);
+            labelValue(s,"剩余尾款",money(Math.max(0,o.sales()-amount)),13,true);
+        }
         s.y+=8;
-        txt(s,"备注：本报价仅显示客户报价信息，不包含成本、利润及内部费用数据",MUTED,10,false,L,s.y);s.y+=18;
+        txt(s,"备注：本报价仅显示客户报价及付款信息，不包含成本、利润及内部费用数据",MUTED,10,false,L,s.y);s.y+=18;
         txt(s,"惠州市岁康商贸",NAVY,11,true,L,s.y);
         finishPage(s);s.doc.writeTo(out);s.doc.close();
     }
