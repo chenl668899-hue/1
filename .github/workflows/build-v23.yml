@@ -73,6 +73,13 @@ jobs:
           XML
           cp app/src/main/res/mipmap-anydpi-v26/suikang_v23_launcher.xml app/src/main/res/mipmap-anydpi-v26/suikang_v23_launcher_round.xml
 
+      - name: Diagnose order rendering
+        shell: bash
+        run: |
+          echo '=== ORDER / PROFIT / IMAGE MATCHES ==='
+          grep -n -C 10 -E '毛利润|salePrice|imageAsset|imageUri|loadProductImage|setImage|orderItems|draftItems' app/src/main/java/com/suikang/sales/MainActivity.java | sed -n '1,320p'
+          exit 1
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
