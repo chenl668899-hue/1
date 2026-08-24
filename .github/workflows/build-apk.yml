@@ -40,6 +40,7 @@ jobs:
         shell: bash
         run: |
           cat payload/v2_main.part*.b64 | base64 --decode | gzip -d > app/src/main/java/com/suikang/sales/MainActivity.java
+          sed -i 's/R\.drawable\.app_logo/R.mipmap.ic_launcher/g' app/src/main/java/com/suikang/sales/MainActivity.java
           cp payload/v2_Models.java app/src/main/java/com/suikang/sales/Models.java
           cp payload/v2_DataStore.java app/src/main/java/com/suikang/sales/DataStore.java
           cp payload/v2_ChannelXlsxExporter.java app/src/main/java/com/suikang/sales/ChannelXlsxExporter.java
