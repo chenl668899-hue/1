@@ -1,0 +1,32 @@
+name: Export SDK35 Full Build Tools
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/export-sdk35-full.yml'
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK 35
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          mkdir -p sdk/platforms/android-35 sdk/build-tools
+          cp "$ANDROID_SDK_ROOT/platforms/android-35/android.jar" sdk/platforms/android-35/
+          cp -a "$ANDROID_SDK_ROOT/build-tools/35.0.0" sdk/build-tools/
+          tar -czf sdk35-build-tools.tar.gz sdk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk35-build-tools-full
+          path: sdk35-build-tools.tar.gz
+          if-no-files-found: error
