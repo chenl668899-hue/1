@@ -77,8 +77,13 @@ public final class PdfQuotationExporter {
         Bitmap b=loadRefs(s.ctx,it.imageUri,it.imageAsset);
         if(b!=null)return b;
         Models.Product p=findProduct(s.products,it);
-        if(p!=null)return loadRefs(s.ctx,p.imageUri,p.imageAsset);
-        return null;
+        if(p!=null){
+            b=loadRefs(s.ctx,p.imageUri,p.imageAsset);
+            if(b!=null)return b;
+            b=loadLocalProductDir(s.ctx,p.code,p.id,p.name);
+            if(b!=null)return b;
+        }
+        return loadLocalProductDir(s.ctx,it.code,it.productId,it.name);
     }
     private static Models.Product findProduct(List<Models.Product> ps,Models.OrderItem it){
         if(ps==null)return null;
@@ -88,6 +93,29 @@ public final class PdfQuotationExporter {
         if(!name.isEmpty())for(Models.Product p:ps)if(name.equals(norm(p.name)))return p;
         return null;
     }
+    private static Bitmap loadLocalProductDir(Context c,String code,String id,String name){
+        try{
+            File dir=new File(c.getFilesDir(),"product_images");
+            if(!dir.isDirectory())return null;
+            String[] keys=new String[]{safeFileKey(code),safeFileKey(id),safeFileKey(name)};
+            File[] fs=dir.listFiles();if(fs==null)return null;
+            File best=null;
+            for(String key:keys){
+                if(key.isEmpty())continue;
+                for(File f:fs){
+                    if(!f.isFile()||f.length()<=0)continue;
+                    String n=f.getName();
+                    if(n.startsWith(key+"_")||n.equalsIgnoreCase(key+".jpg")||n.equalsIgnoreCase(key+".jpeg")||n.equalsIgnoreCase(key+".png")||n.equalsIgnoreCase(key+".webp")){
+                        if(best==null||f.lastModified()>best.lastModified())best=f;
+                    }
+                }
+                if(best!=null)break;
+            }
+            if(best==null)return null;
+            try(InputStream in=new FileInputStream(best)){return BitmapFactory.decodeStream(in);}
+        }catch(Exception e){return null;}
+    }
+    private static String safeFileKey(String s){String x=safe(s).replaceAll("[^A-Za-z0-9._-]","_");return x.isEmpty()?"":x;}
     private static Bitmap loadRefs(Context c,String imageUri,String imageAsset){
         InputStream in=null;
         try{
