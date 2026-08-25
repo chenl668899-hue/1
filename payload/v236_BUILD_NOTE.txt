@@ -1,0 +1,1 @@
+V2.3.6 mobile-only PDF product image fix. Preserve package name and existing data model. PDF image lookup order: order item refs -> matched product refs -> app-private filesDir/product_images fallback -> bundled asset. versionCode 236, versionName 2.3.6.
