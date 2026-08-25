@@ -37,7 +37,11 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient(){
             @Override public void onPageFinished(WebView view,String url){
                 super.onPageFinished(view,url);
-                try{ view.evaluateJavascript(readAssetText("v21.js"),null); }catch(Exception ignored){}
+                try{
+                    view.evaluateJavascript(readAssetText("v21.js"), value -> {
+                        try{ view.evaluateJavascript(readAssetText("v22.js"),null); }catch(Exception ignored){}
+                    });
+                }catch(Exception ignored){}
             }
         });
         web.setWebChromeClient(new WebChromeClient(){
@@ -63,7 +67,7 @@ public class MainActivity extends Activity {
     private String getJson(String urlText) throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(urlText).openConnection();
         c.setConnectTimeout(7000); c.setReadTimeout(7000); c.setRequestMethod("GET");
-        c.setRequestProperty("Accept","application/json"); c.setRequestProperty("User-Agent","USDT-Ledger/2.1");
+        c.setRequestProperty("Accept","application/json"); c.setRequestProperty("User-Agent","USDT-Ledger/2.2");
         int code=c.getResponseCode(); if(code<200||code>=300) throw new Exception("行情接口返回 "+code);
         StringBuilder sb=new StringBuilder();
         try(BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream(),StandardCharsets.UTF_8))){
