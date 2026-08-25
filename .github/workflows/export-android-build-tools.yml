@@ -1,0 +1,39 @@
+name: Export Android Build Tools
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/export-android-build-tools.yml'
+
+jobs:
+  export-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android Build Tools 35
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "build-tools;35.0.0"
+      - name: Package apksigner and zipalign
+        shell: bash
+        run: |
+          BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
+          mkdir -p export/lib
+          cp "$BT/apksigner" export/
+          cp "$BT/zipalign" export/
+          cp "$BT/lib/apksigner.jar" export/lib/
+          chmod +x export/apksigner export/zipalign
+          tar -czf android-build-tools-signing.tar.gz -C export .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-build-tools-signing
+          path: android-build-tools-signing.tar.gz
+          if-no-files-found: error
