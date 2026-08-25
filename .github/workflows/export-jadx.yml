@@ -1,0 +1,25 @@
+name: Export Jadx CLI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/export-jadx.yml'
+
+jobs:
+  export-jadx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download jadx 1.5.6
+        shell: bash
+        run: |
+          curl -L --fail --retry 3 -o jadx.zip https://github.com/skylot/jadx/releases/download/v1.5.6/jadx-1.5.6.zip
+          unzip -q jadx.zip -d jadx-dist
+          tar -czf jadx-cli-1.5.6.tar.gz -C jadx-dist .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jadx-cli-1.5.6
+          path: jadx-cli-1.5.6.tar.gz
+          if-no-files-found: error
