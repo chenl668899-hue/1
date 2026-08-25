@@ -1,0 +1,25 @@
+name: Export Suikang V236 Source
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/export-v236-source.yml'
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode V236 source payload
+        shell: bash
+        run: |
+          mkdir -p out
+          base64 --decode payload/v236_src.tar.gz.b64 | tar -xzf - -C out
+          find out -maxdepth 4 -type f | head -100
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suikang-v236-source
+          path: out
+          if-no-files-found: error
