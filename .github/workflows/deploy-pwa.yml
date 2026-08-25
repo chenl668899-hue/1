@@ -29,7 +29,8 @@ jobs:
         run: |
           rm -rf "$SITE_DIR"
           mkdir -p "$SITE_DIR"
-          base64 --decode pwa/pwa_v1_bundle.b64 > /tmp/suikang-pwa.zip
+          cat pwa/bundle.part* | tr -d '\r\n' | base64 --decode > /tmp/suikang-pwa.zip
+          unzip -t /tmp/suikang-pwa.zip
           unzip -q /tmp/suikang-pwa.zip -d "$SITE_DIR"
           test -s "$SITE_DIR/index.html"
           test -s "$SITE_DIR/manifest.webmanifest"
