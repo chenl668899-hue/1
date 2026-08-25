@@ -35,13 +35,10 @@ jobs:
           test -s "$SITE_DIR/index.html"
           test -s "$SITE_DIR/manifest.webmanifest"
           test -s "$SITE_DIR/sw.js"
-      - name: Enable GitHub Pages if needed
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          gh api --method POST "repos/$GITHUB_REPOSITORY/pages" -f build_type=workflow >/dev/null 2>&1 || true
-      - uses: actions/configure-pages@v5
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: pwa_site
