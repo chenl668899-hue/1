@@ -1,0 +1,110 @@
+name: Build Suikang Mac V1.0
+
+on:
+  push:
+    branches: [ mac-v1 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare seed product catalog
+        shell: bash
+        run: |
+          mkdir -p mac_app/seed
+          cat payload/part*.b64 | base64 --decode > /tmp/android-source.zip
+          unzip -p /tmp/android-source.zip app/src/main/assets/products.json > mac_app/seed/products.json
+          test -s mac_app/seed/products.json
+
+      - name: Create safe-zone Mac icon
+        shell: bash
+        run: |
+          mkdir -p mac_app/build mac_app/build/icon.iconset
+          cat > mac_app/build/icon.svg <<'SVG'
+          <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+            <defs>
+              <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#3190ff"/><stop offset="1" stop-color="#0d4ab5"/></linearGradient>
+              <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffd761"/><stop offset="1" stop-color="#e39b13"/></linearGradient>
+            </defs>
+            <rect width="1024" height="1024" rx="235" fill="#0d2741"/>
+            <rect x="115" y="115" width="794" height="794" rx="190" fill="url(#g)"/>
+            <text x="512" y="500" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="370" font-weight="900" font-style="italic" fill="white">SK</text>
+            <path d="M210 610 C380 760 650 760 825 550" fill="none" stroke="url(#gold)" stroke-width="38" stroke-linecap="round"/>
+            <path d="M803 536 l70 -10 -42 58 z" fill="#f4bd29"/>
+            <text x="512" y="770" text-anchor="middle" font-family="PingFang SC,Arial,sans-serif" font-size="105" font-weight="700" fill="white">岁康商贸</text>
+          </svg>
+          SVG
+          qlmanage -t -s 1024 -o mac_app/build mac_app/build/icon.svg >/dev/null 2>&1 || true
+          if [ -f mac_app/build/icon.svg.png ]; then mv mac_app/build/icon.svg.png mac_app/build/icon-1024.png; fi
+          if [ ! -f mac_app/build/icon-1024.png ]; then
+            python3 -m pip install --quiet pillow
+            python3 - <<'PY'
+          from PIL import Image,ImageDraw,ImageFont
+          im=Image.new('RGB',(1024,1024),(13,39,65));d=ImageDraw.Draw(im)
+          d.rounded_rectangle((115,115,909,909),radius=190,fill=(39,109,216))
+          f=ImageFont.truetype('/System/Library/Fonts/Supplemental/Arial Bold.ttf',330)
+          d.text((512,420),'SK',font=f,anchor='mm',fill='white')
+          d.arc((200,420,850,780),10,165,fill=(244,189,41),width=38)
+          fc='/System/Library/Fonts/PingFang.ttc'
+          try: cf=ImageFont.truetype(fc,100,index=0)
+          except: cf=ImageFont.truetype('/System/Library/Fonts/Supplemental/Arial Unicode.ttf',90)
+          d.text((512,760),'岁康商贸',font=cf,anchor='mm',fill='white')
+          im.save('mac_app/build/icon-1024.png')
+          PY
+          fi
+          sips -z 16 16 mac_app/build/icon-1024.png --out mac_app/build/icon.iconset/icon_16x16.png >/dev/null
+          sips -z 32 32 mac_app/build/icon-1024.png --out mac_app/build/icon.iconset/icon_16x16@2x.png >/dev/null
+          sips -z 32 32 mac_app/build/icon-1024.png --out mac_app/build/icon.iconset/icon_32x32.png >/dev/null
+          sips -z 64 64 mac_app/build/icon-1024.png --out mac_app/build/icon.iconset/icon_32x32@2x.png >/dev/null
+          sips -z 128 128 mac_app/build/icon-1024.png --out mac_app/build/icon.iconset/icon_128x128.png >/dev/null
+          sips -z 256 256 mac_app/build/icon-1024.png --out mac_app/build/icon.iconset/icon_128x128@2x.png >/dev/null
+          sips -z 256 256 mac_app/build/icon-1024.png --out mac_app/build/icon.iconset/icon_256x256.png >/dev/null
+          sips -z 512 512 mac_app/build/icon-1024.png --out mac_app/build/icon.iconset/icon_256x256@2x.png >/dev/null
+          sips -z 512 512 mac_app/build/icon-1024.png --out mac_app/build/icon.iconset/icon_512x512.png >/dev/null
+          cp mac_app/build/icon-1024.png mac_app/build/icon.iconset/icon_512x512@2x.png
+          iconutil -c icns mac_app/build/icon.iconset -o mac_app/build/icon.icns
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mac_app/package.json
+
+      - name: Install desktop dependencies
+        working-directory: mac_app
+        run: npm install --no-audit --no-fund
+
+      - name: Build Apple Silicon app
+        working-directory: mac_app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run build:mac
+
+      - name: Ad-hoc sign and create DMG
+        shell: bash
+        run: |
+          APP_PATH=$(find mac_app/dist -maxdepth 3 -name '*.app' -print -quit)
+          test -n "$APP_PATH"
+          codesign --force --deep --sign - "$APP_PATH"
+          codesign --verify --deep --strict "$APP_PATH"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" mac_app/dist/SuikangSales-Mac-V1.0-arm64.zip
+          mkdir -p /tmp/suikang-dmg
+          cp -R "$APP_PATH" /tmp/suikang-dmg/
+          ln -s /Applications /tmp/suikang-dmg/Applications
+          hdiutil create -volname '岁康商贸销售管理系统' -srcfolder /tmp/suikang-dmg -ov -format UDZO mac_app/dist/SuikangSales-Mac-V1.0-arm64.dmg
+          file mac_app/dist/SuikangSales-Mac-V1.0-arm64.dmg
+
+      - name: Upload Mac installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuikangSales-Mac-V1.0-arm64
+          path: |
+            mac_app/dist/SuikangSales-Mac-V1.0-arm64.dmg
+            mac_app/dist/SuikangSales-Mac-V1.0-arm64.zip
+          if-no-files-found: error
