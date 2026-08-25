@@ -1,6 +1,6 @@
 {
   "name": "suikang-sales-mac",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "岁康商贸销售管理系统 Mac版",
   "main": "main.js",
   "author": "惠州市岁康商贸",
@@ -27,9 +27,10 @@
       "category": "public.app-category.business",
       "target": [{"target":"dir","arch":["arm64"]}],
       "icon": "build/icon.icns",
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "identity": null
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     }
   }
 }
