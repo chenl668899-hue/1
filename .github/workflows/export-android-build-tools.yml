@@ -22,15 +22,19 @@ jobs:
         run: |
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "build-tools;35.0.0"
-      - name: Package apksigner and zipalign
+      - name: Package Android APK inspection and signing tools
         shell: bash
         run: |
           BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
-          mkdir -p export/lib
+          mkdir -p export/lib64 export/lib
           cp "$BT/apksigner" export/
           cp "$BT/zipalign" export/
+          cp "$BT/aapt" export/
+          cp "$BT/aapt2" export/
           cp "$BT/lib/apksigner.jar" export/lib/
-          chmod +x export/apksigner export/zipalign
+          [ -f "$BT/lib64/libc++.so" ] && cp "$BT/lib64/libc++.so" export/lib64/ || true
+          [ -f "$BT/lib64/libc++_shared.so" ] && cp "$BT/lib64/libc++_shared.so" export/lib64/ || true
+          chmod +x export/apksigner export/zipalign export/aapt export/aapt2
           tar -czf android-build-tools-signing.tar.gz -C export .
       - uses: actions/upload-artifact@v4
         with:
