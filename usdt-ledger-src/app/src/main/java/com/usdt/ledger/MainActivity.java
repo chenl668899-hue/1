@@ -12,7 +12,12 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import java.io.OutputStream;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private WebView web;
@@ -29,7 +34,12 @@ public class MainActivity extends Activity {
         WebSettings s=web.getSettings();
         s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setAllowFileAccess(true); s.setAllowContentAccess(true);
         web.addJavascriptInterface(new Bridge(),"AndroidBridge");
-        web.setWebViewClient(new WebViewClient());
+        web.setWebViewClient(new WebViewClient(){
+            @Override public void onPageFinished(WebView view,String url){
+                super.onPageFinished(view,url);
+                try{ view.evaluateJavascript(readAssetText("v21.js"),null); }catch(Exception ignored){}
+            }
+        });
         web.setWebChromeClient(new WebChromeClient(){
             @Override public boolean onShowFileChooser(WebView w, ValueCallback<Uri[]> cb, FileChooserParams params){
                 if(fileCallback!=null) fileCallback.onReceiveValue(null);
@@ -42,7 +52,56 @@ public class MainActivity extends Activity {
         web.loadUrl("file:///android_asset/index.html");
     }
 
+    private String readAssetText(String name) throws Exception{
+        StringBuilder sb=new StringBuilder();
+        try(BufferedReader br=new BufferedReader(new InputStreamReader(getAssets().open(name),StandardCharsets.UTF_8))){
+            String line; while((line=br.readLine())!=null) sb.append(line).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private String getJson(String urlText) throws Exception{
+        HttpURLConnection c=(HttpURLConnection)new URL(urlText).openConnection();
+        c.setConnectTimeout(7000); c.setReadTimeout(7000); c.setRequestMethod("GET");
+        c.setRequestProperty("Accept","application/json"); c.setRequestProperty("User-Agent","USDT-Ledger/2.1");
+        int code=c.getResponseCode(); if(code<200||code>=300) throw new Exception("行情接口返回 "+code);
+        StringBuilder sb=new StringBuilder();
+        try(BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream(),StandardCharsets.UTF_8))){
+            String line; while((line=br.readLine())!=null) sb.append(line);
+        }finally{ c.disconnect(); }
+        return sb.toString();
+    }
+
+    private double fetchCoinGecko() throws Exception{
+        JSONObject j=new JSONObject(getJson("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=cny"));
+        double r=j.getJSONObject("tether").getDouble("cny");
+        if(r<=0)throw new Exception("CoinGecko 汇率无效");
+        return r;
+    }
+
+    private double fetchCoinbase() throws Exception{
+        JSONObject j=new JSONObject(getJson("https://api.coinbase.com/v2/exchange-rates?currency=USDT"));
+        double r=j.getJSONObject("data").getJSONObject("rates").getDouble("CNY");
+        if(r<=0)throw new Exception("Coinbase 汇率无效");
+        return r;
+    }
+
     public class Bridge {
+        @JavascriptInterface public void fetchUsdtCnyRate(){
+            new Thread(()->{
+                try{
+                    double rate; String source;
+                    try{ rate=fetchCoinGecko(); source="CoinGecko"; }
+                    catch(Exception first){ rate=fetchCoinbase(); source="Coinbase"; }
+                    final double out=rate; final String src=source; final long ts=System.currentTimeMillis();
+                    runOnUiThread(()->web.evaluateJavascript("onRealtimeRate("+out+","+JSONObject.quote(src)+","+ts+")",null));
+                }catch(Exception ex){
+                    final String msg=ex.getMessage()==null?"网络请求失败":ex.getMessage();
+                    runOnUiThread(()->web.evaluateJavascript("onRealtimeRateError("+JSONObject.quote(msg)+")",null));
+                }
+            }).start();
+        }
+
         @JavascriptInterface public void saveText(String name,String text,String mime){
             pendingName=name==null?"export.txt":name; pendingText=text==null?"":text; pendingMime=mime==null?"text/plain":mime;
             runOnUiThread(()->{
