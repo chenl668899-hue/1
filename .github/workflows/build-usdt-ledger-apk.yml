@@ -39,6 +39,14 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Validate V2.1 assets
+        shell: bash
+        run: |
+          test -s app/src/main/assets/index.html
+          test -s app/src/main/assets/v21.js
+          grep -q 'fetchUsdtCnyRate' app/src/main/java/com/usdt/ledger/MainActivity.java
+          grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml
+
       - name: Build APK
         run: gradle --no-daemon :app:assembleDebug --stacktrace
 
@@ -48,11 +56,12 @@ jobs:
           test -s app/build/outputs/apk/debug/app-debug.apk
           unzip -t app/build/outputs/apk/debug/app-debug.apk
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/index.html'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/v21.js'
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: USDT-Ledger-V2.0-APK
+          name: USDT-Ledger-V2.1-APK
           path: usdt-ledger-src/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -62,9 +71,9 @@ jobs:
         working-directory: .
         run: |
           mkdir -p dist
-          cp usdt-ledger-src/app/build/outputs/apk/debug/app-debug.apk 'dist/USDT-Ledger-V2.0.apk'
+          cp usdt-ledger-src/app/build/outputs/apk/debug/app-debug.apk 'dist/USDT-Ledger-V2.1.apk'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add 'dist/USDT-Ledger-V2.0.apk'
-          git commit -m 'Publish USDT Ledger V2.0 APK' || exit 0
+          git add 'dist/USDT-Ledger-V2.1.apk'
+          git commit -m 'Publish USDT Ledger V2.1 APK' || exit 0
           git push origin HEAD:usdt-ledger-apk
