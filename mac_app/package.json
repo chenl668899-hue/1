@@ -1,0 +1,35 @@
+{
+  "name": "suikang-sales-mac",
+  "version": "1.0.0",
+  "description": "岁康商贸销售管理系统 Mac版",
+  "main": "main.js",
+  "author": "惠州市岁康商贸",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac dir --arm64"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "fast-xml-parser": "^5.2.5",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.suikang.sales.mac",
+    "productName": "岁康商贸销售管理系统",
+    "asar": true,
+    "files": ["main.js","preload.js","renderer.js","index.html","styles.css","seed/**/*"],
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [{"target":"dir","arch":["arm64"]}],
+      "icon": "build/icon.icns",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null
+    }
+  }
+}
