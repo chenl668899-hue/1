@@ -1,0 +1,167 @@
+name: Patch OKX demo settings password
+
+on:
+  push:
+    branches: [artifact-cleanup]
+
+permissions:
+  contents: read
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download verified R373 demo APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o demo.zip 'https://filebin.net/okx-v66-32989025738-24859/OKX-Scanner-V6.6-TRADE-ENTRY-FIX-20260827-003501-R373.zip'
+          unzip -j demo.zip '*.apk' -d .
+          APK=$(find . -maxdepth 1 -name '*.apk' -type f | head -n1)
+          mv "$APK" demo.apk
+          echo 'bdb025e9534f3d8eccbf7eb20b3da7a4bb6e5aeb65cc8fc3ba36facf07206fb2  demo.apk' | sha256sum -c -
+
+      - name: Download latest apktool
+        shell: bash
+        run: |
+          set -euxo pipefail
+          URL=$(curl -fsSL https://api.github.com/repos/iBotPeaches/Apktool/releases/latest | jq -r '.assets[] | select(.name|test("^apktool_.*\\.jar$")) | .browser_download_url' | head -n1)
+          test -n "$URL"
+          curl -fL --retry 3 -o apktool.jar "$URL"
+          java -jar apktool.jar --version
+
+      - name: Decode and patch only settings gate
+        shell: bash
+        run: |
+          set -euxo pipefail
+          java -jar apktool.jar d -f demo.apk -o decoded
+          python3 - <<'PY'
+          from pathlib import Path
+
+          base = Path('decoded/smali_classes3/com/okx/scanner')
+          outer_path = base / 'MainActivity$App$2.smali'
+          inner_path = base / 'MainActivity$App$2$2.smali'
+          main_path = base / 'MainActivity.smali'
+          for p in (outer_path, inner_path, main_path):
+              if not p.exists():
+                  raise SystemExit(f'missing expected smali: {p}')
+
+          outer = outer_path.read_text()
+          inner = inner_path.read_text()
+          main = main_path.read_text()
+
+          # Verify the exact original triple-tap behavior first.
+          tap_anchor = 'invoke-static {p2, v4}, Lcom/okx/scanner/MainActivity;->access$App$lambda$8(Landroidx/compose/runtime/MutableState;Z)V'
+          if inner.count(tap_anchor) != 1:
+              raise SystemExit(f'unexpected triple-tap anchor count: {inner.count(tap_anchor)}')
+          if 'const-wide/16 v4, 0x4b0' not in inner or 'const/4 v5, 0x3' not in inner:
+              raise SystemExit('triple-tap timing/count markers missing')
+
+          # MainActivity$App$2$2 currently receives the real settings MutableState as its
+          # third tap-handler state. Pass authPrompt instead. The existing AuthorizationDialog
+          # already closes authPrompt and opens settings only after a valid key.
+          ctor = 'Lcom/okx/scanner/MainActivity$App$2$2;-><init>('
+          idx = outer.find(ctor)
+          if idx < 0:
+              raise SystemExit('App$2$2 constructor invocation missing')
+          window_start = max(0, idx - 4000)
+          window = outer[window_start:idx]
+          field = '->$settings$delegate:Landroidx/compose/runtime/MutableState;'
+          auth_field = '->$authPrompt$delegate:Landroidx/compose/runtime/MutableState;'
+          pos = window.rfind(field)
+          if pos < 0:
+              raise SystemExit('settings argument load before App$2$2 constructor missing')
+          abs_pos = window_start + pos
+          outer = outer[:abs_pos] + auth_field + outer[abs_pos + len(field):]
+
+          # Change the existing AuthorizationDialog key from its old SHA-256 to SHA-256("chenl").
+          old_hash = '5d60e99c8da48daff7c5cf7c7b932634759dd9d0024cf2642583e27410e6b6fa'
+          new_hash = '1b26fd71ee3760b1997308791b02bb4734b9f6fccc59c1f38167a9e3248c0f9b'
+          if main.count(old_hash) != 1:
+              raise SystemExit(f'old settings-key hash count unexpected: {main.count(old_hash)}')
+          main = main.replace(old_hash, new_hash, 1)
+
+          def esc(s: str) -> str:
+              return ''.join(c if ord(c) < 128 else f'\\u{ord(c):04x}' for c in s)
+
+          # Make the existing authorization UI read as a normal password dialog.
+          replacements = {
+              '设置授权': '设置验证',
+              '请输入授权密钥后进入交易设置': '请输入密码后进入设置',
+              '授权密钥错误': '密码错误',
+              '授权密钥': '密码',
+              '授权进入': '进入设置',
+          }
+          for old, new in replacements.items():
+              old_e, new_e = esc(old), esc(new)
+              if old_e in main:
+                  main = main.replace(old_e, new_e)
+              elif old in main:
+                  main = main.replace(old, new)
+              else:
+                  print(f'warning: UI text not found: {old}')
+
+          outer_path.write_text(outer)
+          main_path.write_text(main)
+
+          # Static verification of the two behavior changes.
+          outer2 = outer_path.read_text()
+          main2 = main_path.read_text()
+          window2 = outer2[window_start:idx]
+          if auth_field not in window2:
+              raise SystemExit('authPrompt was not wired into triple-tap handler')
+          if old_hash in main2 or new_hash not in main2:
+              raise SystemExit('password hash replacement failed')
+          print('PATCH_OK: triple tap -> existing password dialog -> chenl -> settings')
+          PY
+
+          echo '=== VERIFY PATCH MARKERS ==='
+          grep -n 'authPrompt\$delegate' 'decoded/smali_classes3/com/okx/scanner/MainActivity$App$2.smali' | tail -10
+          grep -n '1b26fd71ee3760b1997308791b02bb4734b9f6fccc59c1f38167a9e3248c0f9b' decoded/smali_classes3/com/okx/scanner/MainActivity.smali
+
+      - name: Rebuild and sign patched APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          java -jar apktool.jar b decoded -o unsigned.apk
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n1)
+          test -x "$ZIPALIGN"
+          test -x "$APKSIGNER"
+          keytool -genkeypair -noprompt -keystore demo-signing.jks -storepass android -keypass android -alias demo -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=OKX Demo,O=Local,C=MY'
+          "$ZIPALIGN" -f -p 4 unsigned.apk aligned.apk
+          FINAL='OKX-Scanner-V6.6-DEMO-TRIPLE-TAP-PASSWORD-CHENL.apk'
+          "$APKSIGNER" sign --ks demo-signing.jks --ks-key-alias demo --ks-pass pass:android --key-pass pass:android --out "$FINAL" aligned.apk
+          "$APKSIGNER" verify --verbose --print-certs "$FINAL"
+          ls -lh "$FINAL"
+          sha256sum "$FINAL" | tee FINAL_SHA256.txt
+          echo "FINAL=$FINAL" >> "$GITHUB_ENV"
+
+      - name: Publish direct APK links without Actions artifacts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          RESPONSE=$(curl -fsSL -F "file=@${FINAL}" https://tmpfiles.org/api/v1/upload || true)
+          PAGE_URL=$(echo "$RESPONSE" | jq -r '.data.url // empty' 2>/dev/null || true)
+          if [ -n "$PAGE_URL" ]; then
+            TMPFILES_URL="${PAGE_URL/https:\/\/tmpfiles.org\//https:\/\/tmpfiles.org\/dl\/}"
+            echo "FINAL_TMPFILES_URL=$TMPFILES_URL"
+          else
+            echo 'FINAL_TMPFILES_URL=FAILED'
+          fi
+
+          BIN="okx-demo-chenl-${GITHUB_RUN_ID}-${RANDOM}"
+          FILEBIN_RESPONSE=$(curl -fsSL -X POST -H 'Content-Type: application/vnd.android.package-archive' --data-binary "@${FINAL}" "https://filebin.net/${BIN}/${FINAL}" || true)
+          FILEBIN_NAME=$(echo "$FILEBIN_RESPONSE" | jq -r '.file.filename // empty' 2>/dev/null || true)
+          if [ -n "$FILEBIN_NAME" ]; then
+            echo "FINAL_FILEBIN_PAGE=https://filebin.net/${BIN}"
+            echo "FINAL_FILEBIN_URL=https://filebin.net/${BIN}/${FINAL}"
+          else
+            echo 'FINAL_FILEBIN_URL=FAILED'
+          fi
+
+          if [ -z "${TMPFILES_URL:-}" ] && [ -z "${FILEBIN_NAME:-}" ]; then
+            echo 'No download host succeeded' >&2
+            exit 1
+          fi
