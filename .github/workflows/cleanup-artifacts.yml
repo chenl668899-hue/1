@@ -1,0 +1,35 @@
+name: Cleanup old Actions artifacts
+
+on:
+  push:
+    branches: [ artifact-cleanup ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old artifacts, keep newest 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          tmp=$(mktemp)
+          gh api --paginate "repos/$repo/actions/artifacts?per_page=100" --jq '.artifacts[] | [.created_at,.id,.name,.size_in_bytes] | @tsv' > "$tmp"
+          total=$(wc -l < "$tmp" | tr -d ' ')
+          echo "Artifacts before cleanup: $total"
+          if [ "$total" -le 3 ]; then
+            echo "Nothing to delete"
+            exit 0
+          fi
+          sort -r "$tmp" | tail -n +4 | while IFS=$'\t' read -r created id name size; do
+            echo "Deleting $id | $created | $name | $size bytes"
+            gh api --method DELETE "repos/$repo/actions/artifacts/$id"
+          done
+          echo "Cleanup finished"
