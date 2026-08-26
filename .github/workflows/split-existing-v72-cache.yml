@@ -1,0 +1,54 @@
+name: Split Existing V7.2 Cache
+
+on:
+  push:
+    branches: [ artifact-cleanup ]
+    paths:
+      - '.github/workflows/split-existing-v72-cache.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download successful full cache artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: okx-v72-gradle-cache
+          path: input
+          github-token: ${{ github.token }}
+          repository: chenl668899-hue/1
+          run-id: 32999877712
+      - name: Split full cache below connector limit
+        run: |
+          set -euxo pipefail
+          FILE=$(find input -type f -name 'okx-v72-gradle-cache.tar.gz' | head -n1)
+          test -n "$FILE"
+          split -b 240M -d -a 1 "$FILE" okx-v72-gradle-cache.part-
+          ls -lh okx-v72-gradle-cache.part-*
+          test -f okx-v72-gradle-cache.part-0
+          test -f okx-v72-gradle-cache.part-1
+          test -f okx-v72-gradle-cache.part-2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v72-cache-part-0
+          path: okx-v72-gradle-cache.part-0
+          retention-days: 1
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v72-cache-part-1
+          path: okx-v72-gradle-cache.part-1
+          retention-days: 1
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v72-cache-part-2
+          path: okx-v72-gradle-cache.part-2
+          retention-days: 1
+          compression-level: 0
