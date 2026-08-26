@@ -1,0 +1,28 @@
+name: Export Apktool
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/export-apktool.yml'
+
+jobs:
+  export-apktool:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Download apktool
+        shell: bash
+        run: |
+          curl -L --fail --retry 3 -o apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar
+          java -jar apktool.jar --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apktool-2.11.1
+          path: apktool.jar
+          if-no-files-found: error
