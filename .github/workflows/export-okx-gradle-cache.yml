@@ -87,15 +87,33 @@ jobs:
       - name: Resolve exact V7.2 build dependencies
         working-directory: warm
         run: gradle --no-daemon :app:assembleDebug --stacktrace
-      - name: Package Gradle caches
+      - name: Package and split Gradle caches
         run: |
           du -sh "$HOME/.gradle/caches" || true
           tar -czf okx-v72-gradle-cache.tar.gz -C "$HOME/.gradle" caches
-          ls -lh okx-v72-gradle-cache.tar.gz
+          split -b 240M -d -a 1 okx-v72-gradle-cache.tar.gz okx-v72-gradle-cache.part-
+          ls -lh okx-v72-gradle-cache.part-*
+          test -f okx-v72-gradle-cache.part-0
+          test -f okx-v72-gradle-cache.part-1
+          test -f okx-v72-gradle-cache.part-2
       - uses: actions/upload-artifact@v4
         with:
-          name: okx-v72-gradle-cache
-          path: okx-v72-gradle-cache.tar.gz
+          name: okx-v72-gradle-cache-part-0
+          path: okx-v72-gradle-cache.part-0
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: okx-v72-gradle-cache-part-1
+          path: okx-v72-gradle-cache.part-1
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: okx-v72-gradle-cache-part-2
+          path: okx-v72-gradle-cache.part-2
           retention-days: 1
           compression-level: 0
           if-no-files-found: error
