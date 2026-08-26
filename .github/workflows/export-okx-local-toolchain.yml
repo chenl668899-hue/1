@@ -1,0 +1,45 @@
+name: Export OKX Local Toolchain
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/export-okx-local-toolchain.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+          mkdir -p out/android-sdk/platforms out/android-sdk/build-tools out/android-sdk/platform-tools
+          cp -a "$ANDROID_SDK_ROOT/platforms/android-35" out/android-sdk/platforms/
+          cp -a "$ANDROID_SDK_ROOT/build-tools/35.0.0" out/android-sdk/build-tools/
+          cp -a "$ANDROID_SDK_ROOT/platform-tools/." out/android-sdk/platform-tools/
+      - name: Download Gradle 8.9
+        run: |
+          curl -fL --retry 3 -o gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q gradle.zip -d out
+          test -x out/gradle-8.9/bin/gradle
+      - name: Package
+        run: |
+          tar -czf okx-local-toolchain.tar.gz -C out .
+          ls -lh okx-local-toolchain.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: okx-local-toolchain
+          path: okx-local-toolchain.tar.gz
+          retention-days: 1
+          if-no-files-found: error
