@@ -1,0 +1,43 @@
+name: Inspect OKX demo APK
+
+on:
+  push:
+    branches: [artifact-cleanup]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download last successful demo APK
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o demo.apk 'https://tmpfiles.org/dl/wRwqGzYRSQHE/okx-scanner-v6.6-trade-entry-fix-20260827-003501-r373.apk'
+          ls -lh demo.apk
+          sha256sum demo.apk
+
+      - name: Install JADX and decompile
+        run: |
+          set -euxo pipefail
+          URL=$(curl -fsSL https://api.github.com/repos/skylot/jadx/releases/latest | jq -r '.assets[] | select(.name|test("jadx-[0-9.]+\\.zip$")) | .browser_download_url' | head -n1)
+          test -n "$URL"
+          curl -fL --retry 3 -o jadx.zip "$URL"
+          unzip -q jadx.zip -d jadx
+          chmod +x jadx/bin/jadx
+          jadx/bin/jadx --no-res -d out demo.apk >/tmp/jadx.log 2>&1 || true
+          tail -30 /tmp/jadx.log || true
+
+      - name: Locate settings triple-tap code
+        run: |
+          set -euxo pipefail
+          echo '=== MATCHED FILES ==='
+          grep -RIl --include='*.java' -E '连续点击3次|settingsTapCount|OKX SCANNER.*6\.6|设置' out/sources/com/okx/scanner | head -30 || true
+          echo '=== TRIPLE TAP CONTEXT ==='
+          grep -RIn --include='*.java' -E '连续点击3次|settingsTapCount|1200' out/sources/com/okx/scanner | head -50 || true
+          for f in $(grep -RIl --include='*.java' -E '连续点击3次|settingsTapCount|1200' out/sources/com/okx/scanner | head -8); do
+            echo "===== $f ====="
+            grep -n -B25 -A45 -E '连续点击3次|settingsTapCount|1200' "$f" | head -200 || true
+          done
