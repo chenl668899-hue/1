@@ -1,0 +1,96 @@
+name: Export OKX V7.2 Gradle Cache
+
+on:
+  push:
+    branches: [ artifact-cleanup ]
+    paths:
+      - '.github/workflows/export-okx-gradle-cache.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Create dependency-only V7.2 project
+        run: |
+          mkdir -p warm/app/src/main/java/com/cache/warm
+          cat > warm/settings.gradle.kts <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = "OKXV72CacheWarm"
+          include(":app")
+          EOF
+          cat > warm/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+          }
+          EOF
+          cat > warm/app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+          android {
+              namespace = "com.cache.warm"
+              compileSdk = 35
+              defaultConfig { applicationId = "com.cache.warm"; minSdk = 26; targetSdk = 35; versionCode = 1; versionName = "1" }
+              compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+              buildFeatures { compose = true }
+          }
+          dependencies {
+              implementation(platform("androidx.compose:compose-bom:2025.01.01"))
+              implementation("androidx.activity:activity-compose:1.10.0")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material-icons-extended")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+              implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+              implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+              implementation("com.squareup.okhttp3:okhttp:4.12.0")
+          }
+          EOF
+          cat > warm/app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/AppTheme"><activity android:name=".MainActivity" android:exported="true" /></application></manifest>
+          EOF
+          mkdir -p warm/app/src/main/res/values
+          cat > warm/app/src/main/res/values/styles.xml <<'EOF'
+          <resources><style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar"/></resources>
+          EOF
+          cat > warm/app/src/main/java/com/cache/warm/MainActivity.kt <<'EOF'
+          package com.cache.warm
+          import android.app.Activity
+          class MainActivity: Activity()
+          EOF
+      - name: Resolve exact V7.2 build dependencies
+        working-directory: warm
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Package Gradle caches
+        run: |
+          du -sh "$HOME/.gradle/caches" || true
+          tar -czf okx-v72-gradle-cache.tar.gz -C "$HOME/.gradle" caches
+          ls -lh okx-v72-gradle-cache.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: okx-v72-gradle-cache
+          path: okx-v72-gradle-cache.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
