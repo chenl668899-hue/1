@@ -1,0 +1,26 @@
+name: Export V236 Final Source
+on:
+  push:
+    paths:
+      - '.github/workflows/export-v236-final-source.yml'
+  workflow_dispatch:
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble final source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ls -lh payload/v236final_*.b64
+          cat payload/v236final_*.b64 > /tmp/v236final.b64
+          base64 -d /tmp/v236final.b64 > /tmp/v236final.tar.gz
+          mkdir -p out
+          tar -xzf /tmp/v236final.tar.gz -C out
+          find out -maxdepth 5 -type f | sort | head -200
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suikang-v236-final-source
+          path: out/
+          if-no-files-found: error
