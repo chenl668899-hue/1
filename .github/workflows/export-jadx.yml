@@ -23,3 +23,4 @@ jobs:
           name: jadx-cli-1.5.6
           path: jadx-cli-1.5.6.tar.gz
           if-no-files-found: error
+# refresh 2026-08-27 bulk-import-fix
