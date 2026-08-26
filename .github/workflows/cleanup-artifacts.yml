@@ -9,6 +9,10 @@ permissions:
   contents: read
   actions: write
 
+concurrency:
+  group: cleanup-artifacts
+  cancel-in-progress: true
+
 jobs:
   cleanup:
     runs-on: ubuntu-latest
@@ -30,6 +34,6 @@ jobs:
           fi
           sort -r "$tmp" | tail -n +4 | while IFS=$'\t' read -r created id name size; do
             echo "Deleting $id | $created | $name | $size bytes"
-            gh api --method DELETE "repos/$repo/actions/artifacts/$id"
+            gh api --method DELETE "repos/$repo/actions/artifacts/$id" || true
           done
           echo "Cleanup finished"
