@@ -21,24 +21,27 @@ jobs:
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "build-tools;35.0.0"
-      - name: Package Android APK inspection and signing tools
+          sdkmanager "build-tools;35.0.0" "platforms;android-35"
+      - name: Package Android APK inspection, signing and dex tools
         shell: bash
         run: |
           BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
-          mkdir -p export/lib64 export/lib
+          mkdir -p export/lib64 export/lib export/platform
           cp "$BT/apksigner" export/
           cp "$BT/zipalign" export/
           cp "$BT/aapt" export/
           cp "$BT/aapt2" export/
+          cp "$BT/d8" export/
           cp "$BT/lib/apksigner.jar" export/lib/
+          cp "$BT/lib/d8.jar" export/lib/ 2>/dev/null || cp "$BT/lib/r8.jar" export/lib/d8.jar
+          cp "$ANDROID_SDK_ROOT/platforms/android-35/android.jar" export/platform/android.jar
           [ -f "$BT/lib64/libc++.so" ] && cp "$BT/lib64/libc++.so" export/lib64/ || true
           [ -f "$BT/lib64/libc++_shared.so" ] && cp "$BT/lib64/libc++_shared.so" export/lib64/ || true
-          chmod +x export/apksigner export/zipalign export/aapt export/aapt2
+          chmod +x export/apksigner export/zipalign export/aapt export/aapt2 export/d8
           tar -czf android-build-tools-signing.tar.gz -C export .
       - uses: actions/upload-artifact@v4
         with:
           name: android-build-tools-signing
           path: android-build-tools-signing.tar.gz
           if-no-files-found: error
-# refresh 2026-08-27 bulk-import-fix
+# refresh 2026-08-27 dex-compile
