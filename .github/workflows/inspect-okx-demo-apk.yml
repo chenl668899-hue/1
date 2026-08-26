@@ -15,7 +15,12 @@ jobs:
       - name: Download last successful demo APK
         run: |
           set -euxo pipefail
-          curl -fL --retry 3 -o demo.apk 'https://tmpfiles.org/dl/wRwqGzYRSQHE/okx-scanner-v6.6-trade-entry-fix-20260827-003501-r373.apk'
+          curl -fL --retry 3 -o demo.zip 'https://filebin.net/okx-v66-32989025738-24859/OKX-Scanner-V6.6-TRADE-ENTRY-FIX-20260827-003501-R373.zip'
+          unzip -l demo.zip
+          unzip -j demo.zip '*.apk' -d .
+          APK=$(find . -maxdepth 1 -name '*.apk' -type f | head -n1)
+          test -n "$APK"
+          mv "$APK" demo.apk
           ls -lh demo.apk
           sha256sum demo.apk
 
@@ -39,5 +44,5 @@ jobs:
           grep -RIn --include='*.java' -E '连续点击3次|settingsTapCount|1200' out/sources/com/okx/scanner | head -50 || true
           for f in $(grep -RIl --include='*.java' -E '连续点击3次|settingsTapCount|1200' out/sources/com/okx/scanner | head -8); do
             echo "===== $f ====="
-            grep -n -B25 -A45 -E '连续点击3次|settingsTapCount|1200' "$f" | head -200 || true
+            grep -n -B25 -A45 -E '连续点击3次|settingsTapCount|1200' "$f" | head -220 || true
           done
