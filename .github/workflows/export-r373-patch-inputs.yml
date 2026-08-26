@@ -1,0 +1,38 @@
+name: Export R373 Patch Inputs
+
+on:
+  push:
+    branches: [ artifact-cleanup ]
+    paths:
+      - '.github/workflows/export-r373-patch-inputs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fetch verified R373 APK
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o demo.zip 'https://filebin.net/okx-v66-32989025738-24859/OKX-Scanner-V6.6-TRADE-ENTRY-FIX-20260827-003501-R373.zip'
+          unzip -j demo.zip '*.apk' -d .
+          APK=$(find . -maxdepth 1 -name '*.apk' -type f | head -n1)
+          mv "$APK" R373-base.apk
+          echo 'bdb025e9534f3d8eccbf7eb20b3da7a4bb6e5aeb65cc8fc3ba36facf07206fb2  R373-base.apk' | sha256sum -c -
+      - name: Fetch apktool 3.0.3
+        run: |
+          curl -fL --retry 3 -o apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar
+          java -jar apktool.jar --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r373-patch-inputs
+          path: |
+            R373-base.apk
+            apktool.jar
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
