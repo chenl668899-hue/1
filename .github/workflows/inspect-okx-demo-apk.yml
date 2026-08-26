@@ -1,8 +1,7 @@
 name: Inspect OKX demo APK
 
 on:
-  push:
-    branches: [artifact-cleanup]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -10,42 +9,5 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
-      - name: Download last successful demo APK
-        run: |
-          set -euxo pipefail
-          curl -fL --retry 3 -o demo.zip 'https://filebin.net/okx-v66-32989025738-24859/OKX-Scanner-V6.6-TRADE-ENTRY-FIX-20260827-003501-R373.zip'
-          unzip -j demo.zip '*.apk' -d .
-          APK=$(find . -maxdepth 1 -name '*.apk' -type f | head -n1)
-          mv "$APK" demo.apk
-          sha256sum demo.apk
-
-      - name: Decompile targeted Java
-        run: |
-          set -euxo pipefail
-          URL=$(curl -fsSL https://api.github.com/repos/skylot/jadx/releases/latest | jq -r '.assets[] | select(.name|test("jadx-[0-9.]+\\.zip$")) | .browser_download_url' | head -n1)
-          curl -fL --retry 3 -o jadx.zip "$URL"
-          unzip -q jadx.zip -d jadx
-          chmod +x jadx/bin/jadx
-          jadx/bin/jadx --no-res --threads-count 4 -d out demo.apk >/tmp/jadx.log 2>&1 || true
-          echo '=== MAIN ACTIVITY EXACT CLICK HANDLER ==='
-          sed -n '930,1035p' out/sources/com/okx/scanner/MainActivity.java || true
-
-      - name: Decode smali and locate exact triple-tap method
-        run: |
-          set -euxo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq apktool
-          apktool d -f demo.apk -o decoded >/tmp/apktool.log 2>&1
-          echo '=== FILES CALLING App lambda 13/14/16/17 ==='
-          grep -RIl 'App\$lambda\$13\|App\$lambda\$14\|App\$lambda\$16\|App\$lambda\$17' decoded/smali* | grep 'com/okx/scanner' | head -30 || true
-          echo '=== CURRENT TIME + 0x4b0 CONTEXT ==='
-          for f in $(grep -RIl 'currentTimeMillis()J' decoded/smali* | grep 'com/okx/scanner' | head -40); do
-            if grep -q 'App\$lambda\$13' "$f"; then
-              echo "===== $f ====="
-              grep -n -B45 -A100 'currentTimeMillis()J' "$f" | head -220 || true
-            fi
-          done
-          echo '=== DIRECT SETTINGS TRUE CALLS NEAR TAP HANDLER ==='
-          grep -RIn -B15 -A20 'App\$lambda\$11' decoded/smali* | grep -A20 -B15 'com/okx/scanner' | head -260 || true
+      - run: echo "Manual inspection only"
