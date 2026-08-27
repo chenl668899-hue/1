@@ -6,6 +6,13 @@ on:
     branches: [ main ]
     paths:
       - '.github/workflows/export-android-build-tools.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/export-android-build-tools.yml'
+
+permissions:
+  contents: read
 
 jobs:
   export-tools:
@@ -43,5 +50,7 @@ jobs:
         with:
           name: android-build-tools-signing
           path: android-build-tools-signing.tar.gz
+          retention-days: 7
           if-no-files-found: error
 # refresh 2026-08-27 dex-compile
+# Triggered for the qianlaile APK final signing pass.
