@@ -6,6 +6,13 @@ on:
     branches: [ main ]
     paths:
       - '.github/workflows/export-apktool.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/export-apktool.yml'
+
+permissions:
+  contents: read
 
 jobs:
   export-apktool:
@@ -25,4 +32,5 @@ jobs:
         with:
           name: apktool-2.11.1
           path: apktool.jar
+          retention-days: 7
           if-no-files-found: error
