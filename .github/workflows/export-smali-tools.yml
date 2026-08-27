@@ -1,0 +1,45 @@
+name: Export Smali Tools
+
+on:
+  push:
+    branches: [ artifact-cleanup ]
+    paths:
+      - '.github/workflows/export-smali-tools.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install smali tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y smali
+          which smali
+          which baksmali
+          smali --version || true
+          baksmali --version || true
+      - name: Package tools
+        run: |
+          mkdir -p out/bin out/share/java
+          cp -L "$(which smali)" out/bin/smali
+          cp -L "$(which baksmali)" out/bin/baksmali
+          cp -L /usr/share/java/smali*.jar out/share/java/ 2>/dev/null || true
+          cp -L /usr/share/java/baksmali*.jar out/share/java/ 2>/dev/null || true
+          cp -L /usr/share/java/dexlib2*.jar out/share/java/ 2>/dev/null || true
+          cp -L /usr/share/java/guava*.jar out/share/java/ 2>/dev/null || true
+          cp -L /usr/share/java/antlr3-runtime*.jar out/share/java/ 2>/dev/null || true
+          cp -L /usr/share/java/jcommander*.jar out/share/java/ 2>/dev/null || true
+          cp -L /usr/share/java/jsr305*.jar out/share/java/ 2>/dev/null || true
+          find out -type f -maxdepth 4 -print
+          tar -czf smali-tools.tar.gz -C out .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smali-tools
+          path: smali-tools.tar.gz
+          retention-days: 1
+          compression-level: 0
