@@ -1,0 +1,37 @@
+name: Build OKX Mobile Migrator
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'okx-mobile-migrator/**'
+      - '.github/workflows/build-okx-mobile-migrator.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build installable APK
+        working-directory: okx-mobile-migrator
+        run: gradle :app:assembleDebug --stacktrace
+      - name: Prepare APK
+        run: cp okx-mobile-migrator/app/build/outputs/apk/debug/app-debug.apk OKX-Mobile-Data-Migrator.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OKX-Mobile-Data-Migrator
+          path: OKX-Mobile-Data-Migrator.apk
+          retention-days: 7
+          if-no-files-found: error
