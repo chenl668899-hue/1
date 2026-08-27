@@ -1,2 +1,2 @@
 Android 17 rescue build: path-based APK staging to /data/local/tmp; no stdin pm install.
-Build revision 2.
+Build revision 3.
