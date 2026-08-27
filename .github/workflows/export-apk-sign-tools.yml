@@ -1,0 +1,41 @@
+name: Export APK Sign Tools
+
+on:
+  push:
+    branches: [ artifact-cleanup ]
+    paths:
+      - '.github/workflows/export-apk-sign-tools.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: android-actions/setup-android@v3
+      - name: Install build tools
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'build-tools;35.0.0'
+      - name: Package required tools
+        run: |
+          B="$ANDROID_HOME/build-tools/35.0.0"
+          mkdir -p out/lib64 out/lib
+          cp -L "$B/zipalign" out/
+          cp -L "$B/apksigner" out/
+          cp -L "$B/lib/apksigner.jar" out/lib/
+          find "$ANDROID_HOME" -name 'libc++.so' -o -name 'libc++.so.*' | head -20
+          LIBCPP=$(find "$ANDROID_HOME" -name 'libc++.so' | head -n1)
+          if [ -n "$LIBCPP" ]; then cp -L "$LIBCPP" out/lib64/libc++.so; fi
+          ldd "$B/zipalign" || true
+          tar -czf apk-sign-tools.tar.gz -C out .
+          ls -lh apk-sign-tools.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-sign-tools
+          path: apk-sign-tools.tar.gz
+          retention-days: 1
+          compression-level: 0
