@@ -34,3 +34,5 @@ jobs:
           path: apktool.jar
           retention-days: 7
           if-no-files-found: error
+
+# Triggered for the qianlaile APK ringtone patch.
