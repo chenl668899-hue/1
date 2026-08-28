@@ -4,10 +4,24 @@ android {
     namespace 'com.usdt.ledger'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.usdt.ledger'
+        applicationId 'com.usdt.ledger.stable'
         minSdk 23
         targetSdk 35
-        versionCode 7
-        versionName '2.5.0'
+        versionCode 1
+        versionName '2.5.1-stable'
+    }
+    signingConfigs {
+        stable {
+            storeFile file('../signing/ledger-stable.jks')
+            storePassword 'LedgerStable2026!'
+            keyAlias 'usdt-ledger'
+            keyPassword 'LedgerStable2026!'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.stable
+        }
     }
 }
