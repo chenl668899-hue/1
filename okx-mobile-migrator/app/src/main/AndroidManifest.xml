@@ -4,7 +4,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="OKX 数据迁移修复助手"
+        android:label="OKX V13 一键升级助手"
         android:theme="@style/AppTheme">
 
         <meta-data
