@@ -1,0 +1,98 @@
+name: Build USDT Ledger Stable APK
+
+on:
+  push:
+    branches: [ usdt-ledger-stable ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: usdt-ledger-src
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 35 SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Prepare fixed signing key
+        shell: bash
+        run: |
+          mkdir -p signing
+          if [ -s signing/ledger-stable.jks.b64 ]; then
+            base64 -d signing/ledger-stable.jks.b64 > signing/ledger-stable.jks
+          else
+            keytool -genkeypair -v -keystore signing/ledger-stable.jks -storepass 'LedgerStable2026!' -keypass 'LedgerStable2026!' -alias usdt-ledger -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=USDT Ledger Stable, OU=Personal, O=USDT Ledger, L=Kuala Lumpur, ST=Kuala Lumpur, C=MY'
+            base64 -w 0 signing/ledger-stable.jks > signing/ledger-stable.jks.b64
+          fi
+
+      - name: Validate stable assets
+        shell: bash
+        run: |
+          test -s app/src/main/assets/index.html
+          test -s app/src/main/assets/v21.js
+          test -s app/src/main/assets/v22.js
+          test -s app/src/main/assets/v23.js
+          test -s app/src/main/assets/v24.js
+          grep -q 'openCopyProject' app/src/main/assets/v23.js
+          grep -q 'projectDisplayDate' app/src/main/assets/v23.js
+          grep -q 'ServerSocket' app/src/main/java/com/usdt/ledger/MainActivity.java
+          grep -q "applicationId 'com.usdt.ledger.stable'" app/build.gradle
+          grep -q 'signingConfig signingConfigs.stable' app/build.gradle
+
+      - name: Build signed release APK
+        run: gradle --no-daemon :app:assembleRelease --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          unzip -t "$APK"
+          apksigner verify --verbose --print-certs "$APK"
+
+      - name: Upload stable APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: USDT-Ledger-V2.5.1-Stable-APK
+          path: usdt-ledger-src/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Persist fixed signing key and publish APK
+        shell: bash
+        working-directory: .
+        run: |
+          mkdir -p usdt-ledger-src/signing dist
+          if [ -s usdt-ledger-src/signing/ledger-stable.jks.b64 ]; then
+            git add usdt-ledger-src/signing/ledger-stable.jks.b64
+          fi
+          cp usdt-ledger-src/app/build/outputs/apk/release/app-release.apk 'dist/USDT-Ledger-V2.5.1-Stable.apk'
+          git add 'dist/USDT-Ledger-V2.5.1-Stable.apk'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Publish fixed-signature USDT Ledger V2.5.1 Stable' || exit 0
+          git push origin HEAD:usdt-ledger-stable
