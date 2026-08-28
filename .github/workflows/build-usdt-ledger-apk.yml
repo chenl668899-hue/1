@@ -39,7 +39,7 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Validate V2.4 assets
+      - name: Validate V2.5 assets
         shell: bash
         run: |
           test -s app/src/main/assets/index.html
@@ -51,6 +51,9 @@ jobs:
           grep -q 'projectDisplayDate' app/src/main/assets/v23.js
           grep -q 'onLanDataReceived' app/src/main/assets/v24.js
           grep -q 'startLanServer' app/src/main/assets/v24.js
+          grep -q 'open.er-api.com' app/src/main/assets/v24.js
+          grep -q 'api.frankfurter.app' app/src/main/assets/v24.js
+          grep -q 'multiple行情源\|多个行情源' app/src/main/assets/v24.js || true
           grep -q 'ServerSocket' app/src/main/java/com/usdt/ledger/MainActivity.java
           grep -q 'syncState' app/src/main/java/com/usdt/ledger/MainActivity.java
           grep -q 'v24.js' app/src/main/java/com/usdt/ledger/MainActivity.java
@@ -73,7 +76,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: USDT-Ledger-V2.4-APK
+          name: USDT-Ledger-V2.5-APK
           path: usdt-ledger-src/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -83,9 +86,9 @@ jobs:
         working-directory: .
         run: |
           mkdir -p dist
-          cp usdt-ledger-src/app/build/outputs/apk/debug/app-debug.apk 'dist/USDT-Ledger-V2.4.apk'
+          cp usdt-ledger-src/app/build/outputs/apk/debug/app-debug.apk 'dist/USDT-Ledger-V2.5.apk'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add 'dist/USDT-Ledger-V2.4.apk'
-          git commit -m 'Publish USDT Ledger V2.4 APK' || exit 0
+          git add 'dist/USDT-Ledger-V2.5.apk'
+          git commit -m 'Publish USDT Ledger V2.5 APK' || exit 0
           git push origin HEAD:usdt-ledger-apk
