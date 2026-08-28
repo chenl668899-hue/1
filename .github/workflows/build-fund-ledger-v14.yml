@@ -4,7 +4,7 @@ on:
   push:
     branches: [ fund-ledger-v14-sync ]
     paths:
-      - 'fundledger/v14-source.zip.b64'
+      - 'fundledger/v14-part*.b64'
       - '.github/workflows/build-fund-ledger-v14.yml'
   workflow_dispatch:
 
@@ -24,10 +24,29 @@ jobs:
         run: |
           rm -rf fundledger-v14-build
           mkdir -p fundledger-v14-build
-          base64 --decode fundledger/v14-source.zip.b64 > /tmp/fundledger-v14-source.zip
+          cat fundledger/v14-part*.b64 | base64 --decode > /tmp/fundledger-v14-source.zip
           unzip -q /tmp/fundledger-v14-source.zip -d fundledger-v14-build
           test -f fundledger-v14-build/app/src/main/AndroidManifest.xml
           test -f fundledger-v14-build/app/src/main/assets/index.html
+
+      - name: Fix HTTP newline escapes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('fundledger-v14-build/app/src/main/java/com/fundledger/app/MainActivity.java')
+          s=p.read_text()
+          s=s.replace(r"a=='\\n'&&c=='\\n'", r"a=='\n'&&c=='\n'")
+          s=s.replace(r'x.endsWith("\\r\\n\\r\\n")', r'x.endsWith("\r\n\r\n")')
+          s=s.replace(r'append("\\r\\n")', r'append("\r\n")')
+          s=s.replace(r'append("; charset=utf-8\\r\\n")', r'append("; charset=utf-8\r\n")')
+          s=s.replace(r'append("Connection: close\\r\\n")', r'append("Connection: close\r\n")')
+          s=s.replace(r'append("Access-Control-Allow-Origin: *\\r\\n")', r'append("Access-Control-Allow-Origin: *\r\n")')
+          s=s.replace(r'append("Access-Control-Allow-Methods: GET, POST, OPTIONS\\r\\n")', r'append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")')
+          s=s.replace(r'append("Access-Control-Allow-Headers: Content-Type, X-FundLedger-Code\\r\\n")', r'append("Access-Control-Allow-Headers: Content-Type, X-FundLedger-Code\r\n")')
+          s=s.replace(r'append("Access-Control-Allow-Private-Network: true\\r\\n")', r'append("Access-Control-Allow-Private-Network: true\r\n")')
+          p.write_text(s)
+          PY
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
