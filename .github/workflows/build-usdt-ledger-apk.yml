@@ -39,16 +39,18 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Validate V2.2 assets
+      - name: Validate V2.3 assets
         shell: bash
         run: |
           test -s app/src/main/assets/index.html
           test -s app/src/main/assets/v21.js
           test -s app/src/main/assets/v22.js
+          test -s app/src/main/assets/v23.js
           grep -q 'costPointsRate' app/src/main/assets/v22.js
-          grep -q 'pointCost' app/src/main/assets/v22.js
+          grep -q 'openCopyProject' app/src/main/assets/v23.js
+          grep -q 'projectDisplayDate' app/src/main/assets/v23.js
           grep -q 'fetchUsdtCnyRate' app/src/main/java/com/usdt/ledger/MainActivity.java
-          grep -q 'v22.js' app/src/main/java/com/usdt/ledger/MainActivity.java
+          grep -q 'v23.js' app/src/main/java/com/usdt/ledger/MainActivity.java
           grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml
 
       - name: Build APK
@@ -62,11 +64,12 @@ jobs:
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/index.html'
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/v21.js'
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/v22.js'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/v23.js'
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: USDT-Ledger-V2.2-APK
+          name: USDT-Ledger-V2.3-APK
           path: usdt-ledger-src/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -76,9 +79,9 @@ jobs:
         working-directory: .
         run: |
           mkdir -p dist
-          cp usdt-ledger-src/app/build/outputs/apk/debug/app-debug.apk 'dist/USDT-Ledger-V2.2.apk'
+          cp usdt-ledger-src/app/build/outputs/apk/debug/app-debug.apk 'dist/USDT-Ledger-V2.3.apk'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add 'dist/USDT-Ledger-V2.2.apk'
-          git commit -m 'Publish USDT Ledger V2.2 APK' || exit 0
+          git add 'dist/USDT-Ledger-V2.3.apk'
+          git commit -m 'Publish USDT Ledger V2.3 APK' || exit 0
           git push origin HEAD:usdt-ledger-apk
