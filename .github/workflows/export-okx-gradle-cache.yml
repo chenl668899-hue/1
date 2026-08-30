@@ -1,4 +1,4 @@
-name: Export OKX Gradle Cache
+name: Export OKX Gradle Cache Split
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
       - name: Create dependency-compatible dummy project
         shell: bash
         run: |
-          mkdir -p dummy/app/src/main/java/com/okx/scanner
+          mkdir -p dummy/app/src/main/java/com/okx/scanner dummy/app/src/main/res/values
           cat > dummy/settings.gradle.kts <<'EOF'
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
@@ -81,7 +81,6 @@ jobs:
           cat > dummy/app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/AppTheme"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>
           EOF
-          mkdir -p dummy/app/src/main/res/values
           cat > dummy/app/src/main/res/values/styles.xml <<'EOF'
           <resources><style name="AppTheme" parent="android:style/Theme.Material.NoActionBar"/></resources>
           EOF
@@ -96,14 +95,38 @@ jobs:
       - name: Warm exact dependency cache
         working-directory: dummy
         run: gradle --no-daemon :app:assembleDebug --stacktrace
-      - name: Package Gradle cache
+      - name: Package and split Gradle cache
         shell: bash
         run: |
           tar -czf okx-gradle-cache.tar.gz -C "$HOME/.gradle" caches
-          ls -lh okx-gradle-cache.tar.gz
-      - uses: actions/upload-artifact@v4
+          mkdir parts
+          split -b 170M -d -a 2 okx-gradle-cache.tar.gz parts/cache.part.
+          ls -lh okx-gradle-cache.tar.gz parts/
+      - name: Upload cache part 00
+        uses: actions/upload-artifact@v4
         with:
-          name: okx-gradle-cache
-          path: okx-gradle-cache.tar.gz
+          name: okx-gradle-cache-part-00
+          path: parts/cache.part.00
           retention-days: 1
           if-no-files-found: error
+      - name: Upload cache part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: okx-gradle-cache-part-01
+          path: parts/cache.part.01
+          retention-days: 1
+          if-no-files-found: error
+      - name: Upload cache part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: okx-gradle-cache-part-02
+          path: parts/cache.part.02
+          retention-days: 1
+          if-no-files-found: error
+      - name: Upload cache part 03
+        uses: actions/upload-artifact@v4
+        with:
+          name: okx-gradle-cache-part-03
+          path: parts/cache.part.03
+          retention-days: 1
+          if-no-files-found: warn
