@@ -1,0 +1,109 @@
+name: Export OKX Gradle Cache
+
+on:
+  push:
+    branches: [ okx-cache-export ]
+    paths:
+      - '.github/workflows/export-okx-gradle-cache.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Create dependency-compatible dummy project
+        shell: bash
+        run: |
+          mkdir -p dummy/app/src/main/java/com/okx/scanner
+          cat > dummy/settings.gradle.kts <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = "OKXCacheWarm"
+          include(":app")
+          EOF
+          cat > dummy/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+          }
+          EOF
+          cat > dummy/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          org.gradle.daemon=false
+          org.gradle.parallel=false
+          org.gradle.configuration-cache=false
+          kotlin.incremental=false
+          EOF
+          cat > dummy/app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+          android {
+              namespace = "com.okx.scanner"
+              compileSdk = 35
+              defaultConfig { applicationId = "com.okx.scanner.cachewarm"; minSdk = 26; targetSdk = 35; versionCode = 1; versionName = "1" }
+              compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+              buildFeatures { compose = true; buildConfig = true }
+              packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+          }
+          dependencies {
+              implementation(platform("androidx.compose:compose-bom:2025.01.01"))
+              implementation("androidx.activity:activity-compose:1.10.0")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material-icons-extended")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+              implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+              implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+              implementation("com.squareup.okhttp3:okhttp:4.12.0")
+          }
+          EOF
+          cat > dummy/app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/AppTheme"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>
+          EOF
+          mkdir -p dummy/app/src/main/res/values
+          cat > dummy/app/src/main/res/values/styles.xml <<'EOF'
+          <resources><style name="AppTheme" parent="android:style/Theme.Material.NoActionBar"/></resources>
+          EOF
+          cat > dummy/app/src/main/java/com/okx/scanner/MainActivity.kt <<'EOF'
+          package com.okx.scanner
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.compose.material3.Text
+          class MainActivity: ComponentActivity(){ override fun onCreate(b:Bundle?){ super.onCreate(b); setContent{ Text("cache") } } }
+          EOF
+      - name: Warm exact dependency cache
+        working-directory: dummy
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Package Gradle cache
+        shell: bash
+        run: |
+          tar -czf okx-gradle-cache.tar.gz -C "$HOME/.gradle" caches
+          ls -lh okx-gradle-cache.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: okx-gradle-cache
+          path: okx-gradle-cache.tar.gz
+          retention-days: 1
+          if-no-files-found: error
