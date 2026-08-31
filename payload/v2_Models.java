@@ -67,7 +67,7 @@ public final class Models {
 
     public static class SalesOrder {
         public String id="", date="", customerName="", contact="", phone="", note="", salesChannel="";
-        public double freight=0;
+        public double freight=0, depositRate=0, depositAmount=0;
         public final List<OrderItem> items=new ArrayList<>();
         public final List<FeeItem> fees=new ArrayList<>();
         public double sales(){ double v=0; for(OrderItem i:items)v+=i.revenue(); return v; }
@@ -76,15 +76,16 @@ public final class Models {
         public double extraFees(){ double v=0; for(FeeItem f:fees)v+=f.amount; return v; }
         public double netProfit(){ return grossProfit()-freight-extraFees(); }
         public double margin(){ double s=sales(); return s==0?0:netProfit()/s*100.0; }
+        public double balanceDue(){ return Math.max(0, sales()-depositAmount); }
         public JSONObject toJson(){
             JSONObject o=new JSONObject(); try{
-                o.put("id",id);o.put("date",date);o.put("customerName",customerName);o.put("contact",contact);o.put("phone",phone);o.put("note",note);o.put("salesChannel",salesChannel);o.put("freight",freight);
+                o.put("id",id);o.put("date",date);o.put("customerName",customerName);o.put("contact",contact);o.put("phone",phone);o.put("note",note);o.put("salesChannel",salesChannel);o.put("freight",freight);o.put("depositRate",depositRate);o.put("depositAmount",depositAmount);
                 JSONArray ia=new JSONArray();for(OrderItem i:items)ia.put(i.toJson());o.put("items",ia);
                 JSONArray fa=new JSONArray();for(FeeItem f:fees)fa.put(f.toJson());o.put("fees",fa);
             }catch(Exception ignored){} return o;
         }
         public static SalesOrder fromJson(JSONObject o){
-            SalesOrder s=new SalesOrder();s.id=o.optString("id","");s.date=o.optString("date","");s.customerName=o.optString("customerName","");s.contact=o.optString("contact","");s.phone=o.optString("phone","");s.note=o.optString("note","");s.salesChannel=o.optString("salesChannel","");s.freight=o.optDouble("freight",0);
+            SalesOrder s=new SalesOrder();s.id=o.optString("id","");s.date=o.optString("date","");s.customerName=o.optString("customerName","");s.contact=o.optString("contact","");s.phone=o.optString("phone","");s.note=o.optString("note","");s.salesChannel=o.optString("salesChannel","");s.freight=o.optDouble("freight",0);s.depositRate=o.optDouble("depositRate",0);s.depositAmount=o.optDouble("depositAmount",0);
             JSONArray ia=o.optJSONArray("items");if(ia!=null)for(int i=0;i<ia.length();i++){JSONObject x=ia.optJSONObject(i);if(x!=null)s.items.add(OrderItem.fromJson(x));}
             JSONArray fa=o.optJSONArray("fees");if(fa!=null)for(int i=0;i<fa.length();i++){JSONObject x=fa.optJSONObject(i);if(x!=null)s.fees.add(FeeItem.fromJson(x));}
             return s;

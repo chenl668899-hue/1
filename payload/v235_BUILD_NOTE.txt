@@ -1,0 +1,1 @@
+V2.3.5 uses v235_PdfQuotationExporter.java and must preserve package/data model. VersionCode 235, versionName 2.3.5.

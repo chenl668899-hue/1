@@ -1,0 +1,171 @@
+name: Build Suikang V2.3.4
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-v234:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct source
+        shell: bash
+        run: |
+          cat payload/part*.b64 | base64 --decode > source.zip
+          unzip -o source.zip -d .
+          rm -f source.zip
+          base64 --decode payload/v11.patch.gz.b64 | gzip -d > /tmp/v11.patch
+          patch -p1 < /tmp/v11.patch
+          cp payload/v12_XlsxProductImporter.java app/src/main/java/com/suikang/sales/XlsxProductImporter.java
+          base64 --decode payload/v23_MainActivity.java.gz.b64 | gzip -d > app/src/main/java/com/suikang/sales/MainActivity.java
+          base64 --decode payload/v23_DataStore.java.gz.b64 | gzip -d > app/src/main/java/com/suikang/sales/DataStore.java
+          cp payload/v2_Models.java app/src/main/java/com/suikang/sales/Models.java
+          cp payload/v2_ChannelXlsxExporter.java app/src/main/java/com/suikang/sales/ChannelXlsxExporter.java
+          cp payload/v233_PdfQuotationExporter.java app/src/main/java/com/suikang/sales/PdfQuotationExporter.java
+
+      - name: Apply V2.3.4 code fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('app/src/main/java/com/suikang/sales/XlsxProductImporter.java')
+          s=p.read_text()
+          s=s.replace('if(imageCol>=0&&col>=0&&col!=imageCol)continue;','if(imageCol>=0&&col>=0&&Math.abs(col-imageCol)>1)continue;')
+          s=s.replace('ZipEntry ze=zip.getEntry(r.imageEntry);','ZipEntry ze=zip.getEntry(r.imageEntry);if(ze==null&&r.imageEntry.startsWith("/"))ze=zip.getEntry(r.imageEntry.substring(1));if(ze==null){String bn=new File(r.imageEntry).getName();Enumeration<? extends ZipEntry> en=zip.entries();while(en.hasMoreElements()){ZipEntry x=en.nextElement();if(x.getName().endsWith("/"+bn)){ze=x;break;}}}')
+          p.write_text(s)
+
+          p=Path('app/src/main/java/com/suikang/sales/Models.java')
+          s=p.read_text()
+          s=s.replace('public double freight=0;','public double freight=0, depositRate=0, depositAmount=0;')
+          s=s.replace('o.put("id",id);o.put("date",date);o.put("customerName",customerName);o.put("contact",contact);o.put("phone",phone);o.put("note",note);o.put("salesChannel",salesChannel);o.put("freight",freight);','o.put("id",id);o.put("date",date);o.put("customerName",customerName);o.put("contact",contact);o.put("phone",phone);o.put("note",note);o.put("salesChannel",salesChannel);o.put("freight",freight);o.put("depositRate",depositRate);o.put("depositAmount",depositAmount);')
+          s=s.replace('s.note=o.optString("note","");s.salesChannel=o.optString("salesChannel","");s.freight=o.optDouble("freight",0);','s.note=o.optString("note","");s.salesChannel=o.optString("salesChannel","");s.freight=o.optDouble("freight",0);s.depositRate=o.optDouble("depositRate",0);s.depositAmount=o.optDouble("depositAmount",0);')
+          p.write_text(s)
+
+          p=Path('app/src/main/java/com/suikang/sales/MainActivity.java')
+          s=p.read_text()
+          s=s.replace('private TextView summarySales, summaryCost, summaryGross, summaryFreight, summaryOther, summaryNet, summaryMargin;','private TextView summarySales, summaryCost, summaryGross, summaryFreight, summaryOther, summaryNet, summaryMargin; private EditText depositRateInput, depositAmountInput; private TextView depositBalanceText; private boolean syncingDeposit=false;')
+          s=s.replace('logo.setImageResource(R.mipmap.ic_launcher);logo.setScaleType(ImageView.ScaleType.CENTER_CROP);','logo.setImageResource(R.drawable.suikang_v234_logo);logo.setScaleType(ImageView.ScaleType.FIT_CENTER);')
+          s=s.replace('header.setPadding(dp(16),dp(12),dp(16),dp(12));header.setBackgroundColor(C_NAVY);','int statusTop=0;int statusId=getResources().getIdentifier("status_bar_height","dimen","android");if(statusId>0)statusTop=getResources().getDimensionPixelSize(statusId);header.setPadding(dp(12),statusTop+dp(7),dp(16),dp(8));header.setBackgroundColor(C_NAVY);')
+          s=s.replace('header.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));','header.addView(logo,new LinearLayout.LayoutParams(dp(34),dp(34)));')
+          s=s.replace('ht.setPadding(dp(12),0,0,0);TextView t=text(title,20,true);','ht.setPadding(dp(8),0,0,0);TextView t=text(title,19,true);')
+          s=s.replace('Models.Product pp=findProduct(it.productId);Bitmap bm=pp==null?null:thumb(pp,54,54);','Bitmap bm=thumbOrderItem(it,54,54);')
+          s=s.replace('TextView profit=text("毛利润  "+money(it.grossProfit()),13,true);profit.setTextColor(it.grossProfit()>=0?C_PROFIT:C_LOSS);','TextView profit=text(it.salePrice>0?"毛利润  "+money(it.grossProfit()):"毛利润  待填写销售价",13,true);profit.setTextColor(it.salePrice>0?(it.grossProfit()>=0?C_PROFIT:C_LOSS):C_MUTED);')
+          s=s.replace('private Models.Product findProduct(String id){for(Models.Product p:products)if(p.id.equals(id))return p;return null;}','private Bitmap thumbOrderItem(Models.OrderItem it,int w,int h){Models.Product tmp=new Models.Product();tmp.imageAsset=it.imageAsset==null?"":it.imageAsset;tmp.imageUri=it.imageUri==null?"":it.imageUri;Bitmap bm=thumb(tmp,w,h);if(bm!=null)return bm;Models.Product pp=findProduct(it.productId);return pp==null?null:thumb(pp,w,h);}\n    private Models.Product findProduct(String id){for(Models.Product p:products)if(p.id.equals(id))return p;return null;}')
+          s=s.replace('private void updateProfit(TextView v,Models.OrderItem i){v.setText("毛利润  "+money(i.grossProfit()));v.setTextColor(i.grossProfit()>=0?C_PROFIT:C_LOSS);}','private void updateProfit(TextView v,Models.OrderItem i){if(i.salePrice<=0){v.setText("毛利润  待填写销售价");v.setTextColor(C_MUTED);}else{v.setText("毛利润  "+money(i.grossProfit()));v.setTextColor(i.grossProfit()>=0?C_PROFIT:C_LOSS);}}')
+
+          anchor='feeBox=new LinearLayout(this);feeBox.setOrientation(LinearLayout.VERTICAL);fee.addView(feeBox);page.addView(fee);renderFees();'
+          payment='''feeBox=new LinearLayout(this);feeBox.setOrientation(LinearLayout.VERTICAL);fee.addView(feeBox);page.addView(fee);renderFees();\n        LinearLayout pay=card();pay.addView(sectionTitle("付款信息","填写定金比例或定金金额，系统自动联动计算尾款"));LinearLayout payRow=new LinearLayout(this);payRow.setOrientation(LinearLayout.HORIZONTAL);depositRateInput=input("定金比例 %");depositRateInput.setInputType(2|8192);depositRateInput.setText(o.depositRate==0?"":num(o.depositRate));depositAmountInput=input("定金金额");depositAmountInput.setInputType(2|8192);depositAmountInput.setText(o.depositAmount==0?"":num(o.depositAmount));payRow.addView(depositRateInput,new LinearLayout.LayoutParams(0,dp(50),1));LinearLayout.LayoutParams dalp=new LinearLayout.LayoutParams(0,dp(50),1);dalp.setMargins(dp(8),0,0,0);payRow.addView(depositAmountInput,dalp);pay.addView(payRow);LinearLayout balRow=new LinearLayout(this);balRow.setOrientation(LinearLayout.HORIZONTAL);balRow.setPadding(dp(4),dp(10),dp(4),0);TextView bl=text("剩余尾款",14,false);depositBalanceText=text(money(Math.max(0,o.sales()-o.depositAmount)),16,true);depositBalanceText.setTextColor(C_PRIMARY_DARK);depositBalanceText.setGravity(Gravity.END);balRow.addView(bl,new LinearLayout.LayoutParams(0,-2,1));balRow.addView(depositBalanceText,new LinearLayout.LayoutParams(0,-2,1));pay.addView(balRow);page.addView(pay);watch(depositRateInput,x->{if(syncingDeposit)return;syncingDeposit=true;double rate=Math.max(0,Math.min(100,d(x)));o.depositRate=rate;o.depositAmount=o.sales()*rate/100.0;depositAmountInput.setText(o.depositAmount==0?"":num(o.depositAmount));syncingDeposit=false;recalc(o);});watch(depositAmountInput,x->{if(syncingDeposit)return;syncingDeposit=true;double amount=Math.max(0,d(x));o.depositAmount=amount;double sales=o.sales();o.depositRate=sales>0?amount/sales*100.0:0;depositRateInput.setText(o.depositRate==0?"":num(o.depositRate));syncingDeposit=false;recalc(o);});'''
+          if anchor not in s: raise SystemExit('fee anchor not found')
+          s=s.replace(anchor,payment)
+
+          old='private void recalc(Models.SalesOrder o){if(summarySales==null)return;summarySales.setText(money(o.sales()));summaryCost.setText(money(o.goodsCost()));summaryGross.setText(money(o.grossProfit()));summaryFreight.setText(money(o.freight));summaryOther.setText(money(o.extraFees()));summaryNet.setText(money(o.netProfit()));summaryNet.setTextColor(o.netProfit()>=0?C_PROFIT:C_LOSS);summaryMargin.setText(String.format(Locale.CHINA,"%.2f%%",o.margin()));summaryMargin.setTextColor(o.margin()>=0?C_PROFIT:C_LOSS);}'
+          new='private boolean hasMissingSalePrice(Models.SalesOrder o){for(Models.OrderItem it:o.items)if(it.salePrice<=0)return true;return false;}\n    private void recalc(Models.SalesOrder o){if(summarySales==null)return;if(o.depositRate>0&&!syncingDeposit){o.depositAmount=o.sales()*o.depositRate/100.0;if(depositAmountInput!=null&&!depositAmountInput.hasFocus()){syncingDeposit=true;depositAmountInput.setText(o.depositAmount==0?"":num(o.depositAmount));syncingDeposit=false;}}if(depositBalanceText!=null)depositBalanceText.setText(money(Math.max(0,o.sales()-o.depositAmount)));summaryCost.setText(money(o.goodsCost()));summaryFreight.setText(money(o.freight));summaryOther.setText(money(o.extraFees()));if(hasMissingSalePrice(o)){summarySales.setText("待填写");summaryGross.setText("待计算");summaryNet.setText("待计算");summaryMargin.setText("待计算");summaryGross.setTextColor(C_MUTED);summaryNet.setTextColor(C_MUTED);summaryMargin.setTextColor(C_MUTED);return;}summarySales.setText(money(o.sales()));summaryGross.setText(money(o.grossProfit()));summaryGross.setTextColor(o.grossProfit()>=0?C_PROFIT:C_LOSS);summaryNet.setText(money(o.netProfit()));summaryNet.setTextColor(o.netProfit()>=0?C_PROFIT:C_LOSS);summaryMargin.setText(String.format(Locale.CHINA,"%.2f%%",o.margin()));summaryMargin.setTextColor(o.margin()>=0?C_PROFIT:C_LOSS);}'
+          if old not in s: raise SystemExit('recalc pattern not found')
+          s=s.replace(old,new)
+
+          s=s.replace('TextView cust=button("导出客户报价 Excel",false);','TextView cust=button("导出客户报价 PDF",false);')
+          old_export='private void startExport(Models.SalesOrder o,boolean internal){pendingExportOrder=o;Intent it=new Intent(Intent.ACTION_CREATE_DOCUMENT);it.addCategory(Intent.CATEGORY_OPENABLE);it.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");String who=o.customerName.trim().isEmpty()?"客户":o.customerName.trim();it.putExtra(Intent.EXTRA_TITLE,"岁康商贸_"+who+"_"+(internal?"内部利润单":"报价单")+"_"+o.date+".xlsx");startActivityForResult(it,internal?501:500);}'
+          new_export='private void startExport(Models.SalesOrder o,boolean internal){pendingExportOrder=o;Intent it=new Intent(Intent.ACTION_CREATE_DOCUMENT);it.addCategory(Intent.CATEGORY_OPENABLE);String who=o.customerName.trim().isEmpty()?"客户":o.customerName.trim();if(internal){it.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");it.putExtra(Intent.EXTRA_TITLE,"岁康商贸_"+who+"_内部利润单_"+o.date+".xlsx");}else{it.setType("application/pdf");it.putExtra(Intent.EXTRA_TITLE,"岁康商贸_"+who+"_客户报价单_"+o.date+".pdf");}startActivityForResult(it,internal?501:500);}'
+          if old_export not in s: raise SystemExit('startExport pattern not found')
+          s=s.replace(old_export,new_export)
+          old_result='if(requestCode==501)XlsxExporter.exportInternal(this,pendingExportOrder,out);else XlsxExporter.exportCustomer(this,pendingExportOrder,out);'
+          new_result='if(requestCode==501)XlsxExporter.exportInternal(this,pendingExportOrder,out);else PdfQuotationExporter.export(this,pendingExportOrder,out);'
+          if old_result not in s: raise SystemExit('export result pattern not found')
+          s=s.replace(old_result,new_result)
+          p.write_text(s)
+
+          p=Path('app/build.gradle')
+          s=p.read_text()
+          s=re.sub(r'versionCode\s+\d+','versionCode 234',s)
+          s=re.sub(r"versionName\s+'[^']+'","versionName '2.3.4'",s)
+          p.write_text(s)
+          PY
+
+      - name: Create native launcher icon
+        shell: bash
+        run: |
+          mkdir -p app/src/main/res/drawable app/src/main/res/mipmap-anydpi app/src/main/res/mipmap-anydpi-v26 app/src/main/res/values
+          cat > app/src/main/res/drawable/suikang_v234_logo.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#165FD7" android:pathData="M20,12 H88 Q96,12 96,20 V88 Q96,96 88,96 H20 Q12,96 12,88 V20 Q12,12 20,12 Z"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFF" android:strokeWidth="8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M45,34 C39,28 25,29 25,39 C25,48 43,46 43,56 C43,67 28,70 21,62"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFF" android:strokeWidth="8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M55,31 L55,73 M55,54 L79,31 M55,54 L82,76"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#F4B740" android:strokeWidth="4" android:strokeLineCap="round" android:pathData="M24,80 C42,86 67,84 84,70"/>
+              <path android:fillColor="#F4B740" android:pathData="M79,66 L89,66 L86,76 Z"/>
+          </vector>
+          XML
+          cp app/src/main/res/drawable/suikang_v234_logo.xml app/src/main/res/mipmap-anydpi/suikang_v234_launcher.xml
+          cp app/src/main/res/drawable/suikang_v234_logo.xml app/src/main/res/mipmap-anydpi/suikang_v234_launcher_round.xml
+          cat > app/src/main/res/drawable/suikang_v234_foreground.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M46,35 C40,30 29,30 29,39 C29,47 44,46 44,55 C44,65 32,68 26,62"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M56,33 L56,71 M56,53 L77,34 M56,53 L79,73"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#F4B740" android:strokeWidth="3.5" android:strokeLineCap="round" android:pathData="M28,78 C44,83 64,82 81,69"/>
+              <path android:fillColor="#F4B740" android:pathData="M77,66 L86,66 L83,74 Z"/>
+          </vector>
+          XML
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          colors=Path('app/src/main/res/values/colors.xml')
+          cs=colors.read_text() if colors.exists() else '<resources>\n</resources>\n'
+          if 'name="suikang_launcher_bg"' not in cs: cs=cs.replace('</resources>','    <color name="suikang_launcher_bg">#165FD7</color>\n</resources>')
+          colors.write_text(cs)
+          m=Path('app/src/main/AndroidManifest.xml')
+          s=m.read_text()
+          s=re.sub(r'android:icon="@[^"]+"','android:icon="@mipmap/suikang_v234_launcher"',s)
+          s=re.sub(r'android:roundIcon="@[^"]+"','android:roundIcon="@mipmap/suikang_v234_launcher_round"',s)
+          if 'android:icon=' not in s:
+              s=s.replace('android:allowBackup="true"','android:allowBackup="true"\n        android:icon="@mipmap/suikang_v234_launcher"\n        android:roundIcon="@mipmap/suikang_v234_launcher_round"')
+          m.write_text(s)
+          PY
+          cat > app/src/main/res/mipmap-anydpi-v26/suikang_v234_launcher.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/suikang_launcher_bg"/>
+              <foreground android:drawable="@drawable/suikang_v234_foreground"/>
+          </adaptive-icon>
+          XML
+          cp app/src/main/res/mipmap-anydpi-v26/suikang_v234_launcher.xml app/src/main/res/mipmap-anydpi-v26/suikang_v234_launcher_round.xml
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build V2.3.4 APK
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Collect signing tools
+        run: |
+          mkdir -p sign-tools
+          cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign-tools/
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" sign-tools/
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" sign-tools/
+      - name: Upload V2.3.4 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuikangSalesManagement-V2.3.4-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Upload Android signing tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: AndroidSignTools-V234
+          path: sign-tools
+          if-no-files-found: error
